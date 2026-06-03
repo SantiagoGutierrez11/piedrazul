@@ -9,6 +9,18 @@ const DAYS   = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
+const SPECIALTY_ICONS = {
+    default:            '🩺',
+    'medicina general': '🩺',
+    'fisioterapia':     '💪',
+    'terapia neural':   '🧠',
+    'quiropraxia':      '🦴',
+}
+
+function getIcon(name) {
+    return SPECIALTY_ICONS[name?.toLowerCase()] || SPECIALTY_ICONS.default
+}
+
 
 function addMinutes(timeStr, minutes) {
     const [h, m] = timeStr.split(':').map(Number)
@@ -209,7 +221,7 @@ export default function ScheduleAppointmentPage() {
                         ${selectedSpecialty?.name === spec.name
                                                     ? 'border-blue-600 bg-blue-50'
                                                     : 'border-gray-100 hover:border-blue-300 hover:bg-gray-50'}`}>
-                                            <div className="mb-3"></div>
+                                            <div className="text-2xl mb-3">{getIcon(spec.name)}</div>
                                             <p className={`font-semibold text-sm
                         ${selectedSpecialty?.name === spec.name ? 'text-blue-700' : 'text-gray-800'}`}>
                                                 {spec.name}
