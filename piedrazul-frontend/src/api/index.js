@@ -120,7 +120,7 @@ export const identityApi = {
 
 // ── Patient Service ────────────────────────────────────────
 export const patientApi = {
-  registerWeb: (data) => api.post('/api/v1/register/patient', data),
+  registerWeb: (data) => api.post('/api/v1/patients/register/web', data),
   getById:     (id)   => api.get(`/api/v1/patients/${id}`),
   listAll:     ()     => api.get('/api/v1/patients'),
 }

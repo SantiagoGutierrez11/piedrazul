@@ -1,6 +1,6 @@
-package co.unicauca.piedrazul.appointment.domain.validator;
+package co.unicauca.piedrazul.appointment.domain.service.validator;
 
-import co.unicauca.piedrazul.appointment.domain.entities.Appointment;
+import co.unicauca.piedrazul.appointment.domain.model.Appointment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,12 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class DataAppointmentValidatorTest {
 
     private DataAppointmentValidator validator;
-    private List<Appointment> emptyList;
+    private List<Appointment>        emptyList;
 
     @BeforeEach
     void setUp() {
-        validator = new DataAppointmentValidator();
-        emptyList = new ArrayList<>();
+        validator  = new DataAppointmentValidator();
+        emptyList  = new ArrayList<>();
     }
 
     private Appointment buildValidAppointment() {
@@ -40,15 +40,13 @@ class DataAppointmentValidatorTest {
 
     @Test
     void validate_datosCorrectos_noLanzaExcepcion() {
-        Appointment appointment = buildValidAppointment();
-        assertDoesNotThrow(() -> validator.validate(appointment, emptyList));
+        assertDoesNotThrow(() -> validator.validate(buildValidAppointment(), emptyList));
     }
 
     @Test
     void validate_fechaNula_lanzaExcepcion() {
         Appointment appointment = buildValidAppointment();
         appointment.setDate(null);
-
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> validator.validate(appointment, emptyList)
@@ -60,7 +58,6 @@ class DataAppointmentValidatorTest {
     void validate_horaInicioNula_lanzaExcepcion() {
         Appointment appointment = buildValidAppointment();
         appointment.setStartTime(null);
-
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> validator.validate(appointment, emptyList)
@@ -72,7 +69,6 @@ class DataAppointmentValidatorTest {
     void validate_horaFinNula_lanzaExcepcion() {
         Appointment appointment = buildValidAppointment();
         appointment.setEndTime(null);
-
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> validator.validate(appointment, emptyList)
@@ -85,7 +81,6 @@ class DataAppointmentValidatorTest {
         Appointment appointment = buildValidAppointment();
         appointment.setStartTime(LocalTime.of(10, 0));
         appointment.setEndTime(LocalTime.of(10, 0));
-
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> validator.validate(appointment, emptyList)
@@ -98,7 +93,6 @@ class DataAppointmentValidatorTest {
         Appointment appointment = buildValidAppointment();
         appointment.setStartTime(LocalTime.of(11, 0));
         appointment.setEndTime(LocalTime.of(10, 0));
-
         assertThrows(IllegalArgumentException.class,
                 () -> validator.validate(appointment, emptyList));
     }
@@ -107,7 +101,6 @@ class DataAppointmentValidatorTest {
     void validate_doctorIdCero_lanzaExcepcion() {
         Appointment appointment = buildValidAppointment();
         appointment.setDoctorId(0);
-
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> validator.validate(appointment, emptyList)
@@ -119,7 +112,6 @@ class DataAppointmentValidatorTest {
     void validate_pacienteIdNegativo_lanzaExcepcion() {
         Appointment appointment = buildValidAppointment();
         appointment.setPatientId(-1);
-
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> validator.validate(appointment, emptyList)

@@ -1,6 +1,6 @@
-package co.unicauca.piedrazul.appointment.domain.validator;
+package co.unicauca.piedrazul.appointment.domain.service.validator;
 
-import co.unicauca.piedrazul.appointment.domain.entities.Appointment;
+import co.unicauca.piedrazul.appointment.domain.model.Appointment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,44 +45,35 @@ class ConflictAppointmentValidatorTest {
 
     @Test
     void validate_horaDiferente_noLanzaExcepcion() {
-        Appointment existing = buildAppointment(1, LocalTime.of(10, 0));
+        Appointment existing       = buildAppointment(1, LocalTime.of(10, 0));
         Appointment newAppointment = buildAppointment(0, LocalTime.of(9, 0));
-
-        List<Appointment> existingList = List.of(existing);
-        assertDoesNotThrow(() -> validator.validate(newAppointment, existingList));
+        assertDoesNotThrow(() -> validator.validate(newAppointment, List.of(existing)));
     }
 
     @Test
     void validate_mismaHoraDiferenteCita_lanzaExcepcion() {
-        Appointment existing = buildAppointment(1, LocalTime.of(9, 0));
+        Appointment existing       = buildAppointment(1, LocalTime.of(9, 0));
         Appointment newAppointment = buildAppointment(0, LocalTime.of(9, 0));
-
-        List<Appointment> existingList = List.of(existing);
 
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
-                () -> validator.validate(newAppointment, existingList)
+                () -> validator.validate(newAppointment, List.of(existing))
         );
         assertEquals("Ya existe una cita para ese médico en esa fecha y hora", ex.getMessage());
     }
 
     @Test
     void validate_mismaHoraMismaCita_noLanzaExcepcion() {
-        // Reagendamiento — misma cita, misma hora → no debe conflictuar consigo misma
-        Appointment existing = buildAppointment(5, LocalTime.of(9, 0));
+        Appointment existing        = buildAppointment(5, LocalTime.of(9, 0));
         Appointment sameAppointment = buildAppointment(5, LocalTime.of(9, 0));
-
-        List<Appointment> existingList = List.of(existing);
-        assertDoesNotThrow(() -> validator.validate(sameAppointment, existingList));
+        assertDoesNotThrow(() -> validator.validate(sameAppointment, List.of(existing)));
     }
 
     @Test
     void validate_variasHorasDisponibles_noLanzaExcepcion() {
-        Appointment existing1 = buildAppointment(1, LocalTime.of(9, 0));
-        Appointment existing2 = buildAppointment(2, LocalTime.of(10, 0));
+        Appointment existing1      = buildAppointment(1, LocalTime.of(9, 0));
+        Appointment existing2      = buildAppointment(2, LocalTime.of(10, 0));
         Appointment newAppointment = buildAppointment(0, LocalTime.of(11, 0));
-
-        List<Appointment> existingList = List.of(existing1, existing2);
-        assertDoesNotThrow(() -> validator.validate(newAppointment, existingList));
+        assertDoesNotThrow(() -> validator.validate(newAppointment, List.of(existing1, existing2)));
     }
 }

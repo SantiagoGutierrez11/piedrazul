@@ -15,20 +15,214 @@ function addMinutes(timeStr, minutes) {
   return `${String(Math.floor(total / 60) % 24).padStart(2,'0')}:${String(total % 60).padStart(2,'0')}`
 }
 
+// ── Modal de registro rápido de paciente nuevo ────────────────────────────────
+function RegisterPatientModal({ documentId, onClose, onSuccess }) {
+  const [form, setForm] = useState({
+    firstName:    '',
+    middleName:   '',
+    firstSurname: '',
+    lastName:     '',
+    phone:        '',
+    gender:       'Hombre',
+    email:        '',
+    password:     '',
+    birthDay:     '',
+    birthMonth:   '',
+    birthYear:    '',
+    userTypeId:   'CC',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error,  setError]  = useState('')
+
+  const handleSubmit = async () => {
+    // Validaciones obligatorias
+    if (!form.firstName || !form.firstSurname) {
+      setError('Primer nombre y primer apellido son obligatorios'); return
+    }
+    if (!form.phone) {
+      setError('El teléfono es obligatorio'); return
+    }
+    if (!form.email) {
+      setError('El correo es obligatorio'); return
+    }
+    if (!form.password) {
+      setError('La contraseña es obligatoria'); return
+    }
+    if (!form.birthDay || !form.birthMonth || !form.birthYear) {
+      setError('La fecha de nacimiento es obligatoria'); return
+    }
+
+    setSaving(true)
+    setError('')
+    try {
+      await identityApi.register({
+        userId:       parseInt(documentId),
+        username:     form.email,
+        password:     form.password,
+        firstName:    form.firstName,
+        middleName:   form.middleName,
+        firstSurname: form.firstSurname,
+        lastName:     form.lastName,
+        userTypeId:   form.userTypeId,
+        roleName:     'PACIENTE',
+      })
+      await patientApi.registerWeb({
+        documentId:   parseInt(documentId),
+        userTypeId:   form.userTypeId,
+        firstName:    form.firstName,
+        middleName:   form.middleName,
+        firstSurname: form.firstSurname,
+        lastName:     form.lastName,
+        email:        form.email,
+        password:     form.password,
+        phone:        form.phone,
+        gender:       form.gender,
+        birthDay:     form.birthDay,
+        birthMonth:   form.birthMonth,
+        birthYear:    form.birthYear,
+      })
+      // Guardar tipo de documento para mostrarlo en el perfil
+      localStorage.setItem(`piedrazul_typeId_${documentId}`, form.userTypeId)
+      onSuccess()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error al registrar el paciente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-gray-800">Registrar nuevo paciente</h3>
+              <p className="text-sm text-gray-400 mt-0.5">Documento: {documentId}</p>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+          </div>
+          <div className="px-6 py-5 space-y-3 max-h-[70vh] overflow-y-auto">
+            <div className="grid grid-cols-2 gap-3">
+
+              {/* Tipo y género */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Tipo de documento <span className="text-red-500">*</span></label>
+                <select value={form.userTypeId} onChange={e => setForm({...form, userTypeId: e.target.value})}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  {['CC','TI','CE','PA','RC'].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Género <span className="text-red-500">*</span></label>
+                <select value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                  {['Hombre','Mujer','Otro'].map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+
+              {/* Nombres */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Primer nombre <span className="text-red-500">*</span></label>
+                <input value={form.firstName} onChange={e => setForm({...form, firstName: e.target.value})}
+                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Segundo nombre</label>
+                <input value={form.middleName} onChange={e => setForm({...form, middleName: e.target.value})}
+                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+
+              {/* Apellidos */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Primer apellido <span className="text-red-500">*</span></label>
+                <input value={form.firstSurname} onChange={e => setForm({...form, firstSurname: e.target.value})}
+                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Segundo apellido</label>
+                <input value={form.lastName} onChange={e => setForm({...form, lastName: e.target.value})}
+                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+
+              {/* Contacto */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Teléfono <span className="text-red-500">*</span></label>
+                <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})}
+                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Correo <span className="text-red-500">*</span></label>
+                <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})}
+                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+
+              {/* Contraseña */}
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-500 mb-1">Contraseña <span className="text-red-500">*</span></label>
+                <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})}
+                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+              </div>
+
+              {/* Fecha de nacimiento */}
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-500 mb-1">
+                  Fecha de nacimiento <span className="text-red-500">*</span>
+                  <span className="text-gray-400 ml-1">(DD / MM / AAAA)</span>
+                </label>
+                <div className="flex gap-2">
+                  <input placeholder="DD" maxLength={2} value={form.birthDay}
+                         onChange={e => setForm({...form, birthDay: e.target.value.replace(/\D/g,'')})}
+                         className="w-16 border border-gray-200 rounded-xl px-2 py-2 text-sm text-center focus:outline-none focus:border-blue-500" />
+                  <input placeholder="MM" maxLength={2} value={form.birthMonth}
+                         onChange={e => setForm({...form, birthMonth: e.target.value.replace(/\D/g,'')})}
+                         className="w-16 border border-gray-200 rounded-xl px-2 py-2 text-sm text-center focus:outline-none focus:border-blue-500" />
+                  <input placeholder="AAAA" maxLength={4} value={form.birthYear}
+                         onChange={e => setForm({...form, birthYear: e.target.value.replace(/\D/g,'')})}
+                         className="flex-1 border border-gray-200 rounded-xl px-2 py-2 text-sm text-center focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+
+            </div>
+
+            {error && (
+                <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                  <p className="text-sm text-red-600">{error}</p>
+                </div>
+            )}
+          </div>
+          <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
+            <button onClick={onClose}
+                    className="text-sm text-gray-500 border border-gray-200 rounded-xl px-5 py-2 hover:bg-gray-50 transition-colors">
+              Cancelar
+            </button>
+            <button onClick={handleSubmit} disabled={saving}
+                    className="text-sm bg-blue-600 text-white rounded-xl px-5 py-2 font-semibold
+              hover:bg-blue-700 transition-colors disabled:opacity-40">
+              {saving ? 'Registrando...' : 'Registrar paciente'}
+            </button>
+          </div>
+        </div>
+      </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function CreateAppointmentPage() {
   const navigate    = useNavigate()
   const { hasRole } = useAuth()
 
-  const [allDoctors,   setAllDoctors]   = useState([])
-  const [specialties,  setSpecialties]  = useState([])
-  const [doctors,      setDoctors]      = useState([])
-  const [availability,   setAvailability]   = useState([])
-  const [scheduleDays,   setScheduleDays]   = useState(null) // Set de días ISO (1=Lun…7=Dom) del médico seleccionado
-  const [loadingSlots,   setLoadingSlots]   = useState(false)
-  const [loading,      setLoading]      = useState(false)
-  const [success,      setSuccess]      = useState(false)
-  const [intervalMinutes, setIntervalMinutes] = useState(30)
-  const [patientAppointments, setPatientAppointments] = useState([]) // Historial del paciente
+  const [allDoctors,          setAllDoctors]          = useState([])
+  const [specialties,         setSpecialties]         = useState([])
+  const [doctors,             setDoctors]             = useState([])
+  const [availability,        setAvailability]        = useState([])
+  const [scheduleDays,        setScheduleDays]        = useState(null)
+  const [loadingSlots,        setLoadingSlots]        = useState(false)
+  const [loading,             setLoading]             = useState(false)
+  const [success,             setSuccess]             = useState(false)
+  const [intervalMinutes,     setIntervalMinutes]     = useState(30)
+  const [patientAppointments, setPatientAppointments] = useState([])
+  const [showRegisterModal,   setShowRegisterModal]   = useState(false)
 
   // Búsqueda de paciente
   const [documentId,       setDocumentId]       = useState('')
@@ -42,18 +236,16 @@ export default function CreateAppointmentPage() {
   const [selectedDoctor,    setSelectedDoctor]    = useState('')
   const [selectedDate,      setSelectedDate]      = useState('')
   const [selectedTime,      setSelectedTime]      = useState('')
-  const [refreshKey,        setRefreshKey]        = useState(0) // Para forzar recarga
+  const [refreshKey,        setRefreshKey]        = useState(0)
 
-  // Formulario
   const [form, setForm]     = useState({ reason: '', notes: '' })
   const [errors, setErrors] = useState({})
 
-  // Calendario
   const today = new Date()
   const [calYear,  setCalYear]  = useState(today.getFullYear())
   const [calMonth, setCalMonth] = useState(today.getMonth())
 
-  // --- Cargar todos los médicos y extraer especialidades ---
+  // --- Cargar médicos y especialidades ---
   useEffect(() => {
     medicalApi.listDoctors().then(res => {
       const docs = res.data || []
@@ -74,29 +266,26 @@ export default function CreateAppointmentPage() {
     setAvailability([])
   }, [selectedSpecialty, allDoctors])
 
-  // --- Cargar horario del médico al seleccionarlo (para bloquear días en el calendario) ---
+  // --- Cargar horario del médico ---
   useEffect(() => {
     if (!selectedDoctor) { setScheduleDays(null); return }
     medicalApi.getDoctorSchedule(selectedDoctor).then(res => {
       const s = res.data || []
-      // dayOfWeek del backend: 1=Lun … 7=Dom (ISO 8601)
-      // getDay() de JS:        0=Dom, 1=Lun … 6=Sáb
-      // Conversión: ISO → JS: ISO%7 da 0 para 7(Dom), resto igual
       const jsdays = new Set(s.map(d => d.dayOfWeek % 7))
       setScheduleDays(jsdays)
       if (s.length > 0) setIntervalMinutes(s[0].intervalMinutes || 30)
     }).catch(() => setScheduleDays(null))
   }, [selectedDoctor])
 
-  // --- Cargar slots disponibles para la fecha elegida ---
+  // --- Cargar slots disponibles ---
   useEffect(() => {
     if (!selectedDoctor || !selectedDate) { setAvailability([]); setSelectedTime(''); return }
     setLoadingSlots(true)
     setSelectedTime('')
     medicalApi.getAvailability(selectedDoctor, selectedDate)
-      .then(res => setAvailability(res.data || []))
-      .catch(() => setAvailability([]))
-      .finally(() => setLoadingSlots(false))
+        .then(res => setAvailability(res.data || []))
+        .catch(() => setAvailability([]))
+        .finally(() => setLoadingSlots(false))
   }, [selectedDoctor, selectedDate, refreshKey])
 
   // --- Buscar paciente ---
@@ -115,8 +304,6 @@ export default function CreateAppointmentPage() {
       if (!patRes && !idRes) throw new Error('No encontrado')
       setPatient(patRes?.data || null)
       setPatientName(idRes?.data?.fullName || `Paciente ${documentId}`)
-      
-      // Cargar historial de citas del paciente
       try {
         const appointmentsRes = await appointmentApi.listByPatient(documentId.trim())
         setPatientAppointments(appointmentsRes.data || [])
@@ -143,46 +330,29 @@ export default function CreateAppointmentPage() {
     if (!day) return false
     const d = new Date(calYear, calMonth, day)
     const t = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-
     if (d < t) return false
     if (isHoliday(d)) return false
-
-    // Si hay médico seleccionado, solo habilitar los días en que trabaja
     if (scheduleDays !== null && !scheduleDays.has(d.getDay())) return false
-
     return true
   }
 
-  // Verificar si el paciente tiene cita con Medicina General
   const hasMedicinaGeneral = () => {
     for (const apt of patientAppointments) {
       const doctor = allDoctors.find(d => d.id === apt.doctorId)
-      if (doctor && doctor.specialties && doctor.specialties.includes('Medicina General')) {
-        return true
-      }
+      if (doctor?.specialties?.includes('Medicina General')) return true
     }
     return false
   }
 
-  // Filtrar especialidades según regla de negocio
   const getAvailableSpecialties = () => {
     if (patientAppointments.length === 0 || !hasMedicinaGeneral()) {
-      // Si no tiene citas o no ha pasado por Medicina General, solo mostrar Medicina General
       return specialties.filter(s => s === 'Medicina General')
     }
-    // Si ya pasó por Medicina General, mostrar todas
     return specialties
   }
 
-  // Verificar si el paciente tiene una cita activa (AGENDADA)
-  const hasActiveAppointment = () => {
-    for (const apt of patientAppointments) {
-      if (apt.status === 'AGENDADA') {
-        return true
-      }
-    }
-    return false
-  }
+  const hasActiveAppointment = () =>
+      patientAppointments.some(apt => apt.status === 'AGENDADA')
 
   const formatDate = (day) =>
       `${calYear}-${String(calMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
@@ -201,12 +371,9 @@ export default function CreateAppointmentPage() {
     if (!selectedDate)      e.date      = 'Selecciona una fecha'
     if (!selectedTime)      e.startTime = 'Selecciona una hora'
     if (!form.reason)       e.reason    = 'Obligatorio'
-    
-    // Validar que no tenga cita activa
     if (hasActiveAppointment()) {
       e.general = 'Este paciente ya tiene una cita agendada. Debe esperar a que sea atendida o cancelada antes de agendar otra'
     }
-    
     return e
   }
 
@@ -214,7 +381,6 @@ export default function CreateAppointmentPage() {
     e.preventDefault()
     const newErrors = validate()
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return }
-
     setLoading(true)
     try {
       await appointmentApi.create({
@@ -227,6 +393,7 @@ export default function CreateAppointmentPage() {
         notes:     form.notes,
       })
       setSuccess(true)
+      localStorage.setItem(`piedrazul_typeId_${form.documentId}`, form.userTypeId)
       setTimeout(() => navigate('/appointments'), 2000)
     } catch (err) {
       setErrors({ general: err.response?.data?.message || 'Error al registrar la cita' })
@@ -288,7 +455,17 @@ export default function CreateAppointmentPage() {
                       {searchingPatient ? 'Buscando...' : 'Buscar'}
                     </button>
                   </div>
-                  {patientError && <p className="text-red-500 text-xs mt-2">{patientError}</p>}
+
+                  {/* Error de paciente + botón de registro */}
+                  {patientError && (
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <p className="text-red-500 text-xs">{patientError}</p>
+                        <button type="button" onClick={() => setShowRegisterModal(true)}
+                                className="text-xs text-blue-600 hover:underline font-medium shrink-0 whitespace-nowrap">
+                          + Registrar como paciente nuevo
+                        </button>
+                      </div>
+                  )}
                   {errors.patient && !patientError && <p className="text-red-500 text-xs mt-2">{errors.patient}</p>}
 
                   {patientName && patient && (
@@ -325,14 +502,14 @@ export default function CreateAppointmentPage() {
                     </select>
                     {errors.specialty && <p className="text-red-500 text-xs mt-1">{errors.specialty}</p>}
                     {patientName && patientAppointments.length === 0 && (
-                      <p className="text-blue-600 text-xs mt-1">
-                        ℹ️ Como paciente nuevo, debes agendar primero con Medicina General
-                      </p>
+                        <p className="text-blue-600 text-xs mt-1">
+                          ℹ️ Como paciente nuevo, debes agendar primero con Medicina General
+                        </p>
                     )}
                     {patientName && patientAppointments.length > 0 && !hasMedicinaGeneral() && (
-                      <p className="text-orange-600 text-xs mt-1">
-                        ℹ️ Debes tener al menos una cita con Medicina General antes de acceder a especialidades
-                      </p>
+                        <p className="text-orange-600 text-xs mt-1">
+                          ℹ️ Debes tener al menos una cita con Medicina General antes de acceder a especialidades
+                        </p>
                     )}
                   </div>
 
@@ -356,11 +533,11 @@ export default function CreateAppointmentPage() {
                         ))}
                       </select>
                       {selectedDoctor && (
-                          <button type="button" 
+                          <button type="button"
                                   onClick={() => setRefreshKey(prev => prev + 1)}
                                   disabled={loadingSlots}
                                   className="bg-gray-100 text-gray-600 rounded-xl px-4 py-2.5 text-sm font-semibold
-                                    hover:bg-gray-200 transition-colors disabled:opacity-50 shrink-0"
+                          hover:bg-gray-200 transition-colors disabled:opacity-50 shrink-0"
                                   title="Actualizar horarios">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                           </button>
@@ -440,7 +617,6 @@ export default function CreateAppointmentPage() {
                         const available  = isDateAvailable(day)
                         const dateObj    = day ? new Date(calYear, calMonth, day) : null
                         const isHol      = dateObj && isHoliday(dateObj)
-                        
                         return (
                             <button key={idx} type="button" disabled={!available}
                                     onClick={() => {
@@ -522,6 +698,19 @@ export default function CreateAppointmentPage() {
             </div>
           </form>
         </div>
+
+        {/* Modal de registro de paciente nuevo */}
+        {showRegisterModal && (
+            <RegisterPatientModal
+                documentId={documentId}
+                onClose={() => setShowRegisterModal(false)}
+                onSuccess={() => {
+                  setShowRegisterModal(false)
+                  handleSearchPatient()
+                }}
+            />
+        )}
+
       </Layout>
   )
 }
