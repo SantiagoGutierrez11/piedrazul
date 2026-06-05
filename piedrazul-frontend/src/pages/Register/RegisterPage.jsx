@@ -138,6 +138,7 @@ export default function RegisterPage() {
         birthYear,
       })
       setSuccess(true)
+      localStorage.setItem(`piedrazul_typeId_${form.documentId}`, form.userTypeId)
       setTimeout(() => navigate('/login'), 2500)
     } catch (err) {
       const msg = err.response?.data?.message || ''

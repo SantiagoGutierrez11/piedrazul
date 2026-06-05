@@ -11,11 +11,12 @@ const api = axios.create({
 export const identityApi = {
   login:       (credentials) => api.post('/api/v1/identity/login', credentials),
   getUserById: (id)          => api.get(`/api/v1/identity/users/${id}`),
+  register:    (data)        => api.post('/api/v1/identity/register', data),
 }
 
 // --- Patient Service ---
 export const patientApi = {
-  registerWeb: (data) => api.post('/api/v1/register/patient', data),
+  registerWeb: (data) => api.post('/api/v1/patients/register/web', data),
   getById:     (id)   => api.get(`/api/v1/patients/${id}`),
   listAll:     ()     => api.get('/api/v1/patients'),
 }
@@ -24,13 +25,10 @@ export const patientApi = {
 export const medicalApi = {
   listDoctors:       ()               => api.get('/api/v1/medical/doctors'),
   getDoctorSchedule: (doctorId)       => {
-    // Agregar timestamp para evitar caché
     const timestamp = new Date().getTime()
     return api.get(`/api/v1/medical/doctors/${doctorId}/schedule?_t=${timestamp}`)
   },
-  // El backend ahora obtiene los slots ocupados desde Redis internamente
   getAvailability:   (doctorId, date) => {
-    // Agregar timestamp para evitar caché
     const timestamp = new Date().getTime()
     return api.get(`/api/v1/medical/availability?doctorId=${doctorId}&date=${date}&_t=${timestamp}`)
   },
