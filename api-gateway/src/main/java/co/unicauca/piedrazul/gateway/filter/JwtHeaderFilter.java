@@ -3,9 +3,12 @@ package co.unicauca.piedrazul.gateway.filter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -22,6 +25,11 @@ import java.util.stream.Collectors;
  *   X-User-Username  → preferred_username (email)
  *   X-User-Roles     → roles separados por coma (ADMIN, DOCTOR, ...)
  *   X-User-DbId      → userId custom claim (ID en la BD de identity-service)
+ *
+ * Nota: NO usamos exchange.getRequest().mutate().header(...) porque en este punto
+ * del flujo los headers son de solo lectura (ReadOnlyHttpHeaders) y lanzaría
+ * UnsupportedOperationException. En su lugar construimos una copia escribible
+ * y la exponemos con un ServerHttpRequestDecorator.
  */
 @Component
 public class JwtHeaderFilter implements GlobalFilter, Ordered {
@@ -40,18 +48,31 @@ public class JwtHeaderFilter implements GlobalFilter, Ordered {
                             .map(a -> a.replace("ROLE_", ""))
                             .collect(Collectors.joining(","));
 
-                    String dbId = jwt.hasClaim("userId")
-                            ? String.valueOf(jwt.getClaim("userId"))
-                            : "";
+                    // userId llega como Long de Keycloak; asignar a Object evita
+                    // que String.valueOf resuelva la sobrecarga char[].
+                    Object userIdClaim = jwt.getClaim("userId");
+                    String dbId     = userIdClaim != null ? userIdClaim.toString() : "";
+                    String userId   = jwt.getSubject() != null ? jwt.getSubject() : "";
+                    String username = jwt.getClaimAsString("preferred_username");
+                    if (username == null) username = "";
 
-                    var mutatedRequest = exchange.getRequest().mutate()
-                            .header("X-User-Id",       jwt.getSubject())
-                            .header("X-User-Username", jwt.getClaimAsString("preferred_username"))
-                            .header("X-User-Roles",    roles)
-                            .header("X-User-DbId",     dbId)
-                            .build();
+                    // Copia ESCRIBIBLE de los headers originales + nuestros X-User-*
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.addAll(exchange.getRequest().getHeaders());
+                    headers.set("X-User-Id",       userId);
+                    headers.set("X-User-Username", username);
+                    headers.set("X-User-Roles",    roles);
+                    headers.set("X-User-DbId",     dbId);
 
-                    return exchange.mutate().request(mutatedRequest).build();
+                    ServerHttpRequest decorated =
+                            new ServerHttpRequestDecorator(exchange.getRequest()) {
+                                @Override
+                                public HttpHeaders getHeaders() {
+                                    return headers;
+                                }
+                            };
+
+                    return exchange.mutate().request(decorated).build();
                 })
                 .defaultIfEmpty(exchange)
                 .flatMap(chain::filter);

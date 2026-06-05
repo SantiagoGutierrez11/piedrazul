@@ -5,11 +5,19 @@ const AuthContext = createContext(null)
 
 const APP_ROLES = ['ADMIN', 'DOCTOR', 'PACIENTE', 'AGENDADOR']
 
-/** Decodifica el payload de un JWT (sin verificar firma) */
+/** Decodifica el payload de un JWT (sin verificar firma), respetando UTF-8 */
 function decodeJwt(token) {
   try {
     const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
-    return JSON.parse(atob(base64))
+    // atob devuelve una "binary string" (1 char = 1 byte); reconstruimos UTF-8
+    // para que acentos/ñ (María, Pérez, González) no salgan como "MarÃ­a".
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(json)
   } catch {
     return null
   }

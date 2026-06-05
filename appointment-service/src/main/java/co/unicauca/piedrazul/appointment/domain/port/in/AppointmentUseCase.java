@@ -14,7 +14,7 @@ public interface AppointmentUseCase {
 
     Appointment scheduleAppointment(Appointment appointment);
 
-    Appointment rescheduleAppointment(int appointmentId, LocalDate newDate,
+    Appointment rescheduleAppointment(int appointmentId, Integer newDoctorId, LocalDate newDate,
                                       LocalTime newStartTime, LocalTime newEndTime);
 
     Appointment cancelAppointment(int appointmentId);

@@ -235,6 +235,8 @@ services:
       SPRING_RABBITMQ_PASSWORD: piedrazul_pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      MEDICAL_STAFF_SERVICE_URL: http://medical-staff-service:8082/api/v1/medical
+      IDENTITY_SERVICE_URL: http://identity-service:8081/api/v1/identity
     ports:
       - "8084:8084"
     depends_on:
@@ -274,9 +276,19 @@ services:
     container_name: api-gateway
     restart: unless-stopped
     environment:
-      KEYCLOAK_URL: http://keycloak:8080
+      # Keycloak: issuer público (coincide con el "iss" del token), JWKS por red interna
+      KEYCLOAK_ISSUER_URI:  http://localhost:8180/realms/piedrazul
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/piedrazul/protocol/openid-connect/certs
+      # URLs internas de los microservicios (red de Docker)
+      IDENTITY_SERVICE_URL:      http://identity-service:8081
+      PATIENT_SERVICE_URL:       http://patient-service:8083
+      MEDICAL_SERVICE_URL:       http://medical-staff-service:8082
+      CONFIGURATION_SERVICE_URL: http://configuration-service:8085
+      APPOINTMENT_SERVICE_URL:   http://appointment-service:8084
     ports:
       - "8090:8090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - keycloak
       - medical-staff-service

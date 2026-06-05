@@ -71,11 +71,14 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/api/v1/appointments/patient/**").hasAnyRole("PACIENTE", "DOCTOR", "ADMIN")
                         .pathMatchers(HttpMethod.GET, "/api/v1/appointments/doctor/**").hasAnyRole("DOCTOR", "ADMIN", "AGENDADOR")
                         .pathMatchers(HttpMethod.GET, "/api/v1/appointments/**").hasAnyRole("DOCTOR", "ADMIN", "AGENDADOR")
-                        .pathMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/cancel").hasAnyRole("PACIENTE", "ADMIN")
-                        .pathMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/attend").hasAnyRole("DOCTOR", "ADMIN")
+                        .pathMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/cancel").hasAnyRole("PACIENTE", "AGENDADOR", "DOCTOR", "ADMIN")
+                        .pathMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/attend").hasAnyRole("DOCTOR", "AGENDADOR", "ADMIN")
                         .pathMatchers("/api/v1/appointments/**").hasAnyRole("DOCTOR", "ADMIN", "AGENDADOR", "PACIENTE")
 
-                        // ── IDENTIDAD (Solo ADMIN) ──
+                        // ── IDENTIDAD ──
+                        // Consulta de usuarios (nombre, etc.) para mostrarlos en la UI del personal
+                        .pathMatchers(HttpMethod.GET, "/api/v1/identity/users/**").hasAnyRole("DOCTOR", "AGENDADOR", "ADMIN", "PACIENTE")
+                        // El resto de identidad, solo ADMIN
                         .pathMatchers("/api/v1/identity/**").hasRole("ADMIN")
 
                         // Todo lo demás requiere autenticación
