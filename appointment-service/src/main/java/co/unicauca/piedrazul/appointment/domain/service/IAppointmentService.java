@@ -1,6 +1,6 @@
 package co.unicauca.piedrazul.appointment.domain.service;
 
-import co.unicauca.piedrazul.appointment.domain.entities.Appointment;
+import co.unicauca.piedrazul.appointment.domain.model.Appointment;
 
 import java.time.LocalDate;
 import java.time.LocalTime;

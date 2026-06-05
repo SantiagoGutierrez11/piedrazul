@@ -8,6 +8,14 @@ spring:
   application:
     name: api-gateway
 
+  # --- Keycloak como OAuth2 Resource Server ---
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/piedrazul
+          jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/piedrazul/protocol/openid-connect/certs
+
   cloud:
     gateway:
       # --- Configuración global de CORS ---
