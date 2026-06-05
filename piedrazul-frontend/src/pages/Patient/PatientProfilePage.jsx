@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import PatientLayout from '../../components/PatientLayout'
 import { useAuth } from '../../api/AuthContext'
-import { patientApi, identityApi } from '../../api'
+import { patientApi } from '../../api'
 
 const TYPE_LABELS = {
     CC: 'Cédula de Ciudadanía',
@@ -14,31 +14,26 @@ const TYPE_LABELS = {
 export default function PatientProfilePage() {
     const { user }              = useAuth()
     const [patient, setPatient] = useState(null)
-    const [identity, setIdentity] = useState(null)
 
     useEffect(() => {
         if (!user?.id) return
-        // Cargar datos del patient-service y del identity-service en paralelo
-        Promise.all([
-            patientApi.getById(user.id).catch(() => null),
-            identityApi.getUserById(user.id).catch(() => null),
-        ]).then(([patRes, idRes]) => {
-            setPatient(patRes?.data || null)
-            setIdentity(idRes?.data || null)
-        })
+        patientApi.getById(user.id)
+            .then(res => setPatient(res.data || null))
+            .catch(() => setPatient(null))
     }, [user])
 
     const initials = user?.fullName
         ? user.fullName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
         : 'P'
 
-    // userTypeId puede venir del identity-service si el patient-service lo retorna null
-    const typeId = identity?.userTypeId || patient?.userTypeId
+    // Leer userTypeId guardado en localStorage al momento del registro o login
+    const typeId   = localStorage.getItem(`piedrazul_typeId_${user?.id}`)
+    const typeLabel = typeId ? (TYPE_LABELS[typeId] || typeId) : '—'
 
     const fields = [
         { label: 'Nombre completo',     value: user?.fullName },
         { label: 'Correo',              value: user?.username },
-        { label: 'Tipo de documento',   value: 'Cédula de Ciudadanía' },
+        { label: 'Tipo de documento',   value: typeLabel },
         { label: 'Número de documento', value: user?.id },
         { label: 'Teléfono',            value: patient?.phone || '—' },
         { label: 'Género',              value: patient?.gender || '—' },
@@ -61,8 +56,8 @@ export default function PatientProfilePage() {
                     </div>
                     <h2 className="text-lg font-bold text-gray-800">{user?.fullName}</h2>
                     <span className="inline-block mt-1 text-xs bg-blue-100 text-blue-600 rounded-full px-3 py-1 font-medium">
-            Paciente
-          </span>
+                        Paciente
+                    </span>
                 </div>
 
                 {/* Datos */}

@@ -16,21 +16,18 @@ const SPECIALTY_ICONS = {
     'terapia neural':   '🧠',
     'quiropraxia':      '🦴',
 }
-
 function getIcon(name) {
     return SPECIALTY_ICONS[name?.toLowerCase()] || SPECIALTY_ICONS.default
 }
-
-
 function addMinutes(timeStr, minutes) {
     const [h, m] = timeStr.split(':').map(Number)
-    const total = h * 60 + m + minutes
+    const total  = h * 60 + m + minutes
     return `${String(Math.floor(total / 60) % 24).padStart(2,'0')}:${String(total % 60).padStart(2,'0')}`
 }
 
 export default function ScheduleAppointmentPage() {
-    const navigate = useNavigate()
-    const { user } = useAuth()
+    const navigate  = useNavigate()
+    const { user }  = useAuth()
 
     const [step, setStep]                       = useState(0)
     const [allDoctors, setAllDoctors]           = useState([])
@@ -42,6 +39,10 @@ export default function ScheduleAppointmentPage() {
     const [loading, setLoading]                 = useState(false)
     const [submitting, setSubmitting]           = useState(false)
     const [success, setSuccess]                 = useState(false)
+    const [errorMsg, setErrorMsg]               = useState('')
+
+    const [isFirstAppointment, setIsFirstAppointment] = useState(false)
+    const [hasActiveAppointment, setHasActiveAppointment] = useState(false)
 
     const [selectedSpecialty, setSelectedSpecialty] = useState(null)
     const [selectedDoctor,    setSelectedDoctor]    = useState(null)
@@ -52,31 +53,42 @@ export default function ScheduleAppointmentPage() {
     const [calYear,  setCalYear]  = useState(today.getFullYear())
     const [calMonth, setCalMonth] = useState(today.getMonth())
 
-    // --- Cargar médicos y especialidades ---
     useEffect(() => {
+        if (!user?.id) return
         setLoading(true)
-        medicalApi.listDoctors()
-            .then(res => {
-                const docs = res.data || []
-                setAllDoctors(docs)
-                const specSet = new Set()
-                docs.forEach(d => d.specialties?.forEach(s => specSet.add(s)))
-                setSpecialties([...specSet].map(name => ({ name })))
-            })
-            .catch(() => { setAllDoctors([]); setSpecialties([]) })
-            .finally(() => setLoading(false))
-    }, [])
+        Promise.all([
+            medicalApi.listDoctors(),
+            appointmentApi.listByPatient(user.id).catch(() => ({ data: [] })),
+        ]).then(([docsRes, aptsRes]) => {
+            const docs = docsRes.data || []
+            const apts = aptsRes.data || []
+            setAllDoctors(docs)
 
-    // --- Filtrar médicos por especialidad ---
+            const firstAppointment = apts.length === 0
+            setIsFirstAppointment(firstAppointment)
+
+            // Verificar si tiene cita activa (AGENDADA o REAGENDADA)
+            const activeApt = apts.some(a => a.status === 'AGENDADA' || a.status === 'REAGENDADA')
+            setHasActiveAppointment(activeApt)
+
+            const specSet = new Set()
+            docs.forEach(d => d.specialties?.forEach(s => specSet.add(s)))
+            let allSpecs = [...specSet].map(name => ({ name }))
+            if (firstAppointment) {
+                allSpecs = allSpecs.filter(s => s.name.toLowerCase() === 'medicina general')
+            }
+            setSpecialties(allSpecs)
+        }).catch(() => { setAllDoctors([]); setSpecialties([]) })
+            .finally(() => setLoading(false))
+    }, [user])
+
     useEffect(() => {
         if (!selectedSpecialty) return
         setDoctors(allDoctors.filter(d => d.specialties?.includes(selectedSpecialty.name)))
     }, [selectedSpecialty, allDoctors])
 
-    // --- Cargar disponibilidad (backend maneja slots ocupados via Redis) ---
     useEffect(() => {
         if (!selectedDoctor || !selectedDate) { setAvailability([]); return }
-
         setLoadingSlots(true)
         Promise.all([
             medicalApi.getAvailability(selectedDoctor.id, selectedDate),
@@ -99,11 +111,13 @@ export default function ScheduleAppointmentPage() {
     const handleNext = () => { if (canNext()) setStep(s => s + 1) }
     const handleBack = () => {
         setStep(s => s - 1)
+        setErrorMsg('')
         if (step === 2) { setSelectedDate(''); setSelectedTime('') }
     }
 
     const handleConfirm = async () => {
         setSubmitting(true)
+        setErrorMsg('')
         try {
             await appointmentApi.create({
                 patientId: user?.id,
@@ -118,13 +132,12 @@ export default function ScheduleAppointmentPage() {
             setTimeout(() => navigate('/patient/appointments'), 2500)
         } catch (err) {
             const msg = err.response?.data?.message || 'Error al confirmar la cita. Intenta de nuevo.'
-            alert(msg)
+            setErrorMsg(msg)
         } finally {
             setSubmitting(false)
         }
     }
 
-    // --- Calendario ---
     const buildCalendar = () => {
         const firstDay    = new Date(calYear, calMonth, 1).getDay()
         const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
@@ -166,6 +179,34 @@ export default function ScheduleAppointmentPage() {
         )
     }
 
+    // --- Bloqueo: cita activa existente ---
+    if (!loading && hasActiveAppointment) {
+        return (
+            <PatientLayout>
+                <div className="max-w-lg mx-auto">
+                    <div className="mb-6">
+                        <h1 className="text-2xl font-bold text-gray-800">Agendar Cita</h1>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
+                        <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-3xl">📅</span>
+                        </div>
+                        <h2 className="text-lg font-bold text-gray-800 mb-2">Ya tienes una cita pendiente</h2>
+                        <p className="text-gray-500 text-sm">
+                            Tienes una cita <strong>agendada o reagendada</strong>. Para poder agendar una nueva
+                            cita, primero debes esperar a que sea atendida o cancelarla desde <strong>Mis Citas</strong>.
+                        </p>
+                        <button onClick={() => navigate('/patient/appointments')}
+                                className="mt-6 bg-blue-600 text-white rounded-xl px-6 py-2.5 text-sm font-semibold
+                                hover:bg-blue-700 transition-colors">
+                            Ver mis citas
+                        </button>
+                    </div>
+                </div>
+            </PatientLayout>
+        )
+    }
+
     return (
         <PatientLayout>
             <div className="max-w-3xl mx-auto">
@@ -175,24 +216,33 @@ export default function ScheduleAppointmentPage() {
                     <p className="text-gray-500 text-sm mt-1">Sigue los pasos para agendar tu cita médica</p>
                 </div>
 
+                {isFirstAppointment && (
+                    <div className="mb-4 bg-blue-50 border border-blue-100 rounded-2xl px-5 py-3 flex items-start gap-3">
+                        <span className="text-blue-500 text-lg mt-0.5">ℹ️</span>
+                        <p className="text-sm text-blue-700">
+                            Para tu primera cita debes consultar con <strong>Medicina General</strong>.
+                            Una vez atendido, podrás acceder a las demás especialidades.
+                        </p>
+                    </div>
+                )}
+
                 {/* Stepper */}
                 <div className="flex items-center mb-8">
                     {STEPS.map((label, idx) => (
                         <div key={idx} className="flex items-center flex-1">
                             <div className="flex items-center gap-2">
                                 <div className={`w-7 h-7 rounded-full flex items-center justify-center
-                  text-xs font-bold shrink-0 transition-all
-                  ${idx < step   ? 'bg-blue-600 text-white' : ''}
-                  ${idx === step ? 'bg-blue-600 text-white ring-4 ring-blue-100' : ''}
-                  ${idx > step   ? 'bg-gray-100 text-gray-400' : ''}`}>
+                                    text-xs font-bold shrink-0 transition-all
+                                    ${idx < step   ? 'bg-blue-600 text-white' : ''}
+                                    ${idx === step ? 'bg-blue-600 text-white ring-4 ring-blue-100' : ''}
+                                    ${idx > step   ? 'bg-gray-100 text-gray-400' : ''}`}>
                                     {idx < step
                                         ? <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                         : idx + 1}
                                 </div>
-                                <span className={`text-sm whitespace-nowrap
-                  ${idx === step ? 'font-semibold text-gray-800' : 'text-gray-400'}`}>
-                  {label}
-                </span>
+                                <span className={`text-sm whitespace-nowrap ${idx === step ? 'font-semibold text-gray-800' : 'text-gray-400'}`}>
+                                    {label}
+                                </span>
                             </div>
                             {idx < STEPS.length - 1 && (
                                 <div className={`flex-1 h-px mx-3 ${idx < step ? 'bg-blue-600' : 'bg-gray-200'}`} />
@@ -201,10 +251,8 @@ export default function ScheduleAppointmentPage() {
                     ))}
                 </div>
 
-                {/* Contenido */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 min-h-64">
 
-                    {/* Paso 1: Especialidad */}
                     {step === 0 && (
                         <div>
                             <h2 className="font-semibold text-gray-800 mb-4">Selecciona una especialidad</h2>
@@ -218,12 +266,12 @@ export default function ScheduleAppointmentPage() {
                                         <button key={spec.name} type="button"
                                                 onClick={() => setSelectedSpecialty(spec)}
                                                 className={`p-5 rounded-2xl border-2 text-left transition-all
-                        ${selectedSpecialty?.name === spec.name
+                                                ${selectedSpecialty?.name === spec.name
                                                     ? 'border-blue-600 bg-blue-50'
                                                     : 'border-gray-100 hover:border-blue-300 hover:bg-gray-50'}`}>
                                             <div className="text-2xl mb-3">{getIcon(spec.name)}</div>
                                             <p className={`font-semibold text-sm
-                        ${selectedSpecialty?.name === spec.name ? 'text-blue-700' : 'text-gray-800'}`}>
+                                                ${selectedSpecialty?.name === spec.name ? 'text-blue-700' : 'text-gray-800'}`}>
                                                 {spec.name}
                                             </p>
                                         </button>
@@ -233,7 +281,6 @@ export default function ScheduleAppointmentPage() {
                         </div>
                     )}
 
-                    {/* Paso 2: Profesional */}
                     {step === 1 && (
                         <div>
                             <h2 className="font-semibold text-gray-800 mb-1">Profesionales disponibles</h2>
@@ -250,25 +297,18 @@ export default function ScheduleAppointmentPage() {
                                         return (
                                             <button key={doc.id} type="button"
                                                     onClick={() => setSelectedDoctor({ ...doc, displayName })}
-                                                    className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2
-                          text-left transition-all
-                          ${selectedDoctor?.id === doc.id
-                                                        ? 'border-blue-600 bg-blue-50'
-                                                        : 'border-gray-100 hover:border-blue-300'}`}>
-                                                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center
-                          justify-center text-white text-sm font-bold shrink-0">
+                                                    className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all
+                                                    ${selectedDoctor?.id === doc.id ? 'border-blue-600 bg-blue-50' : 'border-gray-100 hover:border-blue-300'}`}>
+                                                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0">
                                                     {initials}
                                                 </div>
                                                 <div className="flex-1">
-                                                    <p className={`font-semibold text-sm
-                            ${selectedDoctor?.id === doc.id ? 'text-blue-700' : 'text-gray-800'}`}>
+                                                    <p className={`font-semibold text-sm ${selectedDoctor?.id === doc.id ? 'text-blue-700' : 'text-gray-800'}`}>
                                                         {displayName}
                                                     </p>
                                                     <p className="text-gray-400 text-xs mt-0.5">{doc.specialties?.join(', ')}</p>
                                                 </div>
-                                                {selectedDoctor?.id === doc.id && (
-                                                    <span className="text-blue-600 text-lg shrink-0">✓</span>
-                                                )}
+                                                {selectedDoctor?.id === doc.id && <span className="text-blue-600 text-lg shrink-0">✓</span>}
                                             </button>
                                         )
                                     })}
@@ -277,13 +317,10 @@ export default function ScheduleAppointmentPage() {
                         </div>
                     )}
 
-                    {/* Paso 3: Fecha y hora */}
                     {step === 2 && (
                         <div>
                             <h2 className="font-semibold text-gray-800 mb-4">Selecciona fecha y hora</h2>
                             <div className="flex gap-6">
-
-                                {/* Calendario */}
                                 <div className="flex-1">
                                     <div className="flex items-center justify-between mb-3">
                                         <button type="button" onClick={() => {
@@ -296,13 +333,9 @@ export default function ScheduleAppointmentPage() {
                                             else setCalMonth(m => m+1)
                                         }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 text-lg">›</button>
                                     </div>
-
                                     <div className="grid grid-cols-7 mb-1">
-                                        {DAYS.map(d => (
-                                            <div key={d} className="text-center text-xs text-gray-400 font-medium py-1">{d}</div>
-                                        ))}
+                                        {DAYS.map(d => <div key={d} className="text-center text-xs text-gray-400 font-medium py-1">{d}</div>)}
                                     </div>
-
                                     <div className="grid grid-cols-7 gap-0.5">
                                         {buildCalendar().map((day, idx) => {
                                             const dateStr    = day ? formatDate(day) : ''
@@ -311,13 +344,11 @@ export default function ScheduleAppointmentPage() {
                                             return (
                                                 <button key={idx} type="button" disabled={!available}
                                                         onClick={() => { if (available) { setSelectedDate(dateStr); setSelectedTime('') } }}
-                                                        className={`h-8 w-8 mx-auto rounded-full text-xs flex items-center
-                            justify-center transition-colors
-                            ${!day ? 'invisible' : ''}
-                            ${isSelected ? 'bg-blue-600 text-white font-semibold' : ''}
-                            ${available && !isSelected ? 'hover:bg-blue-100 text-gray-700 cursor-pointer' : ''}
-                            ${!available && day ? 'text-gray-300 cursor-not-allowed' : ''}
-                          `}>
+                                                        className={`h-8 w-8 mx-auto rounded-full text-xs flex items-center justify-center transition-colors
+                                                        ${!day ? 'invisible' : ''}
+                                                        ${isSelected ? 'bg-blue-600 text-white font-semibold' : ''}
+                                                        ${available && !isSelected ? 'hover:bg-blue-100 text-gray-700 cursor-pointer' : ''}
+                                                        ${!available && day ? 'text-gray-300 cursor-not-allowed' : ''}`}>
                                                     {day}
                                                 </button>
                                             )
@@ -325,43 +356,27 @@ export default function ScheduleAppointmentPage() {
                                     </div>
                                 </div>
 
-                                {/* Horarios */}
                                 <div className="w-52 shrink-0">
                                     <p className="text-sm font-semibold text-gray-800 mb-1">Horarios disponibles</p>
                                     <p className="text-xs text-gray-400 mb-3">
                                         {selectedDate ? formatDateDisplay(selectedDate) : 'Selecciona una fecha'}
                                     </p>
-
                                     {!selectedDate ? (
                                         <p className="text-gray-300 text-xs">Selecciona una fecha primero</p>
                                     ) : loadingSlots ? (
                                         <p className="text-gray-400 text-xs">Cargando horarios...</p>
                                     ) : availability.length === 0 ? (
-                                        <p className="text-orange-500 text-xs font-medium">
-                                            No hay horarios disponibles para este día
-                                        </p>
+                                        <p className="text-orange-500 text-xs font-medium">No hay horarios disponibles para este día</p>
                                     ) : (
                                         <div>
-                                            <select value={selectedTime}
-                                                    onChange={e => setSelectedTime(e.target.value)}
-                                                    className={`w-full border rounded-xl px-4 py-2.5 text-sm
-                          focus:outline-none transition-colors
-                          ${selectedTime
-                                                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold'
-                                                        : 'border-gray-200 focus:border-blue-500'}`}>
+                                            <select value={selectedTime} onChange={e => setSelectedTime(e.target.value)}
+                                                    className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors
+                                                    ${selectedTime ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-gray-200 focus:border-blue-500'}`}>
                                                 <option value="">Seleccionar hora...</option>
-                                                {availability.map(slot => (
-                                                    <option key={slot} value={slot}>{slot}</option>
-                                                ))}
+                                                {availability.map(slot => <option key={slot} value={slot}>{slot}</option>)}
                                             </select>
-                                            {selectedTime && (
-                                                <p className="text-blue-600 text-xs mt-2 font-medium">
-                                                    Hora seleccionada: {selectedTime}
-                                                </p>
-                                            )}
-                                            <p className="text-gray-400 text-xs mt-2">
-                                                {availability.length} horario(s) libre(s)
-                                            </p>
+                                            {selectedTime && <p className="text-blue-600 text-xs mt-2 font-medium">Hora seleccionada: {selectedTime}</p>}
+                                            <p className="text-gray-400 text-xs mt-2">{availability.length} horario(s) libre(s)</p>
                                         </div>
                                     )}
                                 </div>
@@ -369,7 +384,6 @@ export default function ScheduleAppointmentPage() {
                         </div>
                     )}
 
-                    {/* Paso 4: Confirmación */}
                     {step === 3 && (
                         <div>
                             <h2 className="font-semibold text-gray-800 mb-4">Confirma tu cita</h2>
@@ -387,26 +401,34 @@ export default function ScheduleAppointmentPage() {
                                     </div>
                                 ))}
                             </div>
+                            {errorMsg && (
+                                <div className="mt-4 bg-red-50 border border-red-100 rounded-2xl px-5 py-3 flex items-start gap-3">
+                                    <span className="text-red-500 text-lg mt-0.5">⚠️</span>
+                                    <div>
+                                        <p className="text-sm font-semibold text-red-700">No se pudo confirmar la cita</p>
+                                        <p className="text-sm text-red-600 mt-0.5">{errorMsg}</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Navegación */}
                 <div className="flex items-center justify-between mt-6">
                     <button type="button" onClick={handleBack} disabled={step === 0}
                             className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-30 transition-colors">
-                        Anterior
+                        ← Anterior
                     </button>
                     {step < 3 ? (
                         <button type="button" onClick={handleNext} disabled={!canNext()}
                                 className="bg-blue-600 text-white rounded-xl px-6 py-2.5 text-sm font-semibold
-                hover:bg-blue-700 transition-colors disabled:opacity-40">
-                            Siguiente
+                                hover:bg-blue-700 transition-colors disabled:opacity-40">
+                            Siguiente →
                         </button>
                     ) : (
                         <button type="button" onClick={handleConfirm} disabled={submitting}
                                 className="bg-blue-600 text-white rounded-xl px-8 py-2.5 text-sm font-semibold
-                hover:bg-blue-700 transition-colors disabled:opacity-50">
+                                hover:bg-blue-700 transition-colors disabled:opacity-50">
                             {submitting ? 'Confirmando...' : 'Confirmar Cita'}
                         </button>
                     )}
