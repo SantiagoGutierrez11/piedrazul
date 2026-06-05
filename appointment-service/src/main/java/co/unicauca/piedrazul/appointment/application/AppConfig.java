@@ -1,23 +1,22 @@
 package co.unicauca.piedrazul.appointment.application;
 
-import co.unicauca.piedrazul.appointment.domain.validator.ActiveAppointmentValidator;
-import co.unicauca.piedrazul.appointment.domain.validator.AppointmentValidator;
-import co.unicauca.piedrazul.appointment.domain.validator.ConflictAppointmentValidator;
-import co.unicauca.piedrazul.appointment.domain.validator.DataAppointmentValidator;
-import co.unicauca.piedrazul.appointment.domain.validator.HolidayValidator;
-import co.unicauca.piedrazul.appointment.domain.validator.MedicinaGeneralValidator;
+import co.unicauca.piedrazul.appointment.domain.service.validator.ActiveAppointmentValidator;
+import co.unicauca.piedrazul.appointment.domain.service.validator.AppointmentValidator;
+import co.unicauca.piedrazul.appointment.domain.service.validator.ConflictAppointmentValidator;
+import co.unicauca.piedrazul.appointment.domain.service.validator.DataAppointmentValidator;
+import co.unicauca.piedrazul.appointment.domain.service.validator.ExistenceAppointmentValidator;
+import co.unicauca.piedrazul.appointment.domain.service.validator.HolidayValidator;
+import co.unicauca.piedrazul.appointment.domain.service.validator.MedicinaGeneralValidator;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
- * Configuración de beans de la aplicación
- * Define la cadena de validadores (Chain of Responsibility)
+ * Configuración de la aplicación: beans de Spring y cadena de validadores.
  */
 @Configuration
 public class AppConfig {
@@ -37,28 +36,31 @@ public class AppConfig {
     }
 
     /**
-     * Cadena de validadores para citas médicas
+     * Cadena de validadores — patrón Chain of Responsibility.
      * Orden de ejecución:
-     * 1. DataAppointmentValidator - Valida datos básicos
-     * 2. HolidayValidator - Valida que no sea festivo
-     * 3. ActiveAppointmentValidator - Valida límite de 1 cita activa
-     * 4. MedicinaGeneralValidator - Valida que haya pasado por Medicina General
-     * 5. ConflictAppointmentValidator - Valida conflictos de horario
+     * 1. DataAppointmentValidator      — datos básicos
+     * 2. HolidayValidator              — no festivos
+     * 3. ExistenceAppointmentValidator — paciente y médico existen y están activos
+     * 4. ActiveAppointmentValidator    — máximo 1 cita activa por paciente
+     * 5. MedicinaGeneralValidator      — paso previo por Medicina General
+     * 6. ConflictAppointmentValidator  — sin conflicto de horario
      */
     @Bean
     public List<AppointmentValidator> appointmentValidators(
-            DataAppointmentValidator dataValidator,
-            HolidayValidator holidayValidator,
-            ActiveAppointmentValidator activeAppointmentValidator,
-            MedicinaGeneralValidator medicinaGeneralValidator,
-            ConflictAppointmentValidator conflictValidator) {
-        
-        return Arrays.asList(
-            dataValidator,
-            holidayValidator,
-            activeAppointmentValidator,
-            medicinaGeneralValidator,
-            conflictValidator
+            DataAppointmentValidator      dataValidator,
+            HolidayValidator              holidayValidator,
+            ExistenceAppointmentValidator existenceValidator,
+            ActiveAppointmentValidator    activeValidator,
+            MedicinaGeneralValidator      medicinaGeneralValidator,
+            ConflictAppointmentValidator  conflictValidator) {
+
+        return List.of(
+                dataValidator,
+                holidayValidator,
+                existenceValidator,
+                activeValidator,
+                medicinaGeneralValidator,
+                conflictValidator
         );
     }
 }
