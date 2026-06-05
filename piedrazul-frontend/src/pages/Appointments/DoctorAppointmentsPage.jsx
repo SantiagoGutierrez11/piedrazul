@@ -89,6 +89,7 @@ function RescheduleModal({ appointment, onClose, onSuccess }) {
   const [loading,         setLoading]         = useState(false)
   const [saving,          setSaving]          = useState(false)
   const [error,           setError]           = useState('')
+  const [success,         setSuccess]         = useState(false)
 
   // Fecha mínima: mañana
   const tomorrow = new Date()
@@ -159,12 +160,27 @@ function RescheduleModal({ appointment, onClose, onSuccess }) {
         newStartTime: selectedTime,
         newEndTime:   addMinutes(selectedTime, intervalMinutes),
       })
-      onSuccess()
+      setSuccess(true)
+      setTimeout(() => onSuccess(), 1600)
     } catch (err) {
       setError(err.response?.data?.message || 'Error al reagendar. Intenta de nuevo.')
     } finally {
       setSaving(false)
     }
+  }
+
+  if (success) {
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-xl text-center">
+          <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h3 className="text-lg font-bold text-gray-800">¡Cita reagendada!</h3>
+          <p className="text-gray-500 text-sm mt-1">La cita se actualizó correctamente.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -175,6 +191,41 @@ function RescheduleModal({ appointment, onClose, onSuccess }) {
           Paciente: <span className="font-medium text-gray-700">{appointment.patientName}</span>
           {' '}&mdash; Motivo: <span className="font-medium text-gray-700">{appointment.reason || '—'}</span>
         </p>
+
+        {/* Servicio */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Servicio <span className="text-red-500">*</span>
+          </label>
+          <select value={specialty}
+                  onChange={e => { setSpecialty(e.target.value); setNewDate(''); setSelectedTime(''); setError('') }}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm
+                    focus:outline-none focus:border-blue-500 transition-colors">
+            <option value="">Seleccionar servicio...</option>
+            {specialties.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        {/* Profesional */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Profesional <span className="text-red-500">*</span>
+          </label>
+          <select value={doctorId} disabled={!specialty}
+                  onChange={e => { setDoctorId(e.target.value); setNewDate(''); setSelectedTime(''); setError('') }}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm
+                    focus:outline-none focus:border-blue-500 transition-colors disabled:bg-gray-50 disabled:text-gray-400">
+            <option value="">{specialty ? 'Seleccionar profesional...' : 'Primero elige un servicio'}</option>
+            {doctors.map(d => (
+                <option key={d.id} value={d.id}>{d.fullName || `Profesional ${d.id}`}</option>
+            ))}
+          </select>
+          {specialty === 'Quiropraxia' && doctors.length === 0 && (
+              <p className="text-orange-600 text-xs mt-1">
+                ⚠️ No hay especialistas en Quiropraxia disponibles (activos y con horario).
+              </p>
+          )}
+        </div>
 
         {/* Fecha */}
         <div className="mb-4">
@@ -407,7 +458,6 @@ export default function DoctorAppointmentsPage() {
       {rescheduleModal && (
         <RescheduleModal
           appointment={rescheduleModal}
-          doctorId={doctorId}
           onClose={() => setRescheduleModal(null)}
           onSuccess={() => {
             setRescheduleModal(null)
