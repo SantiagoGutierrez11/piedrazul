@@ -1,5 +1,6 @@
 package co.unicauca.piedrazul.identity;
 
+import co.unicauca.piedrazul.identity.application.UserEventPublisher;
 import co.unicauca.piedrazul.identity.domain.entities.Role;
 import co.unicauca.piedrazul.identity.domain.entities.User;
 import co.unicauca.piedrazul.identity.domain.enums.UserState;
@@ -30,14 +31,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class IdentityServiceTest {
 
-    @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private RoleRepository roleRepository;
-
-    @Mock
-    private BCryptPasswordEncoder passwordEncoder;
+    @Mock private UserRepository        userRepository;
+    @Mock private RoleRepository        roleRepository;
+    @Mock private BCryptPasswordEncoder passwordEncoder;
+    @Mock private UserEventPublisher    eventPublisher;  // ← nuevo
 
     @InjectMocks
     private IdentityService identityService;
@@ -113,6 +110,7 @@ class IdentityServiceTest {
 
         assertNotNull(result);
         verify(userRepository, times(1)).save(any(User.class));
+        verify(eventPublisher, times(1)).publishUserRegistered(any(User.class));
     }
 
     @Test
@@ -162,5 +160,6 @@ class IdentityServiceTest {
 
         assertEquals(UserState.INACTIVO, testUser.getState());
         verify(userRepository, times(1)).save(testUser);
+        verify(eventPublisher, times(1)).publishUserRegistered(any(User.class));
     }
 }

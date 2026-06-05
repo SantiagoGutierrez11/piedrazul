@@ -1,6 +1,8 @@
 package co.unicauca.piedrazul.medical.domain.service;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -12,7 +14,7 @@ import co.unicauca.piedrazul.medical.domain.factory.AvailabilityGeneratorFactory
 import co.unicauca.piedrazul.medical.domain.factory.AvailabilitySlot;
 import co.unicauca.piedrazul.medical.domain.repository.DoctorRepository;
 import co.unicauca.piedrazul.medical.domain.repository.DoctorScheduleRepository;
-import co.unicauca.piedrazul.medical.domain.repository.SpecialtyRepository;
+import co.unicauca.piedrazul.medical.domain.repository.OccupiedSlotCacheRepository;
 
 /**
  * Servicio de dominio para gestión del personal médico.
@@ -25,18 +27,18 @@ public class MedicalStaffService {
 
     private final DoctorRepository             doctorRepository;
     private final DoctorScheduleRepository     scheduleRepository;
-    private final SpecialtyRepository          specialtyRepository;
     private final AvailabilityGeneratorFactory generatorFactory;
+    private final OccupiedSlotCacheRepository  occupiedSlotCacheRepository;
 
     public MedicalStaffService(
             DoctorRepository doctorRepository,
             DoctorScheduleRepository scheduleRepository,
-            SpecialtyRepository specialtyRepository,
-            AvailabilityGeneratorFactory generatorFactory) {
+            AvailabilityGeneratorFactory generatorFactory,
+            OccupiedSlotCacheRepository occupiedSlotCacheRepository) {
         this.doctorRepository    = doctorRepository;
         this.scheduleRepository  = scheduleRepository;
-        this.specialtyRepository = specialtyRepository;
         this.generatorFactory    = generatorFactory;
+        this.occupiedSlotCacheRepository = occupiedSlotCacheRepository;
     }
 
     public List<Doctor> listAllDoctors() {
@@ -65,21 +67,33 @@ public class MedicalStaffService {
         return scheduleRepository.saveAll(newSchedules);
     }
 
-    public List<String> getAvailability(int doctorId, LocalDate date, List<String> occupiedSlots) {
+    public List<String> getAvailability(int doctorId, LocalDate date) {
         findDoctorById(doctorId);
+
         int dayValue = date.getDayOfWeek().getValue();
-        return scheduleRepository.findByDoctorId(doctorId).stream()
-                .filter(s -> s.getDayOfWeek() == dayValue)
-                .findFirst()
-                .map(schedule -> {
-                    var generator = generatorFactory.getGenerator();
-                    return generator.generate(schedule, occupiedSlots)
-                            .stream()
-                            .filter(AvailabilitySlot::isAvailable)
-                            .map(AvailabilitySlot::getTime)
-                            .toList();
-                })
-                .orElse(List.of());
+
+        List<String> occupiedSlots = occupiedSlotCacheRepository
+                .findByDoctorIdAndDate(doctorId, date)
+                .stream()
+                .filter(slot -> !"CANCELADA".equals(slot.getStatus()))
+                .map(slot -> slot.getStartTime().format(DateTimeFormatter.ofPattern("HH:mm")))
+                .toList();
+
+        List<DoctorSchedule> schedules = scheduleRepository.findByDoctorId(doctorId);
+        for (DoctorSchedule schedule : schedules) {
+            if (schedule.getDayOfWeek() == dayValue) {
+                var generator = generatorFactory.getGenerator();
+                List<AvailabilitySlot> slots = generator.generate(schedule, occupiedSlots);
+                List<String> availableTimes = new ArrayList<>();
+                for (AvailabilitySlot slot : slots) {
+                    if (slot.isAvailable()) {
+                        availableTimes.add(slot.getTime());
+                    }
+                }
+                return availableTimes;
+            }
+        }
+        return List.of();
     }
 
     // --- Mapeo de filas nativas a entidades Doctor ---

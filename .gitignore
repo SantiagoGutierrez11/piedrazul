@@ -6,6 +6,8 @@ out/
 # Maven
 target/
 *.class
+.LCK*
+pom.xml.versionsBackup
 
 # Spring Boot
 *.jar
@@ -24,3 +26,4 @@ docker/volumes/
 # OS
 .DS_Store
 Thumbs.db
+/piedrazul-frontend/nbproject/private/
