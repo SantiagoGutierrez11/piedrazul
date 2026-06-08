@@ -1,19 +1,16 @@
 package co.unicauca.piedrazul.appointment.domain.service.validator;
 
+import co.unicauca.piedrazul.appointment.domain.exception.AppointmentValidationException;
 import co.unicauca.piedrazul.appointment.domain.model.Appointment;
 import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentRepositoryPort;
 import co.unicauca.piedrazul.appointment.domain.port.out.DoctorSpecialtyPort;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 /**
  * Valida que un paciente haya pasado por Consulta General antes de acceder a otros servicios.
- * Regla de negocio: todo paciente debe tener al menos una cita de Consulta General.
- * (Como todos los médicos ofrecen Consulta General, el requisito se cumple con cualquier
- *  médico; la guía de "primera cita = Consulta General" se refuerza en el frontend.)
+ * Clase pura de dominio — registrada como @Bean en AppConfig.
  */
-@Component
 public class MedicinaGeneralValidator implements AppointmentValidator {
 
     private final AppointmentRepositoryPort repositoryPort;
@@ -27,6 +24,11 @@ public class MedicinaGeneralValidator implements AppointmentValidator {
 
     @Override
     public void validate(Appointment appointment, List<Appointment> existingOnDate) {
+        // Al reagendar (appointmentId != 0) ya se validó al crear la cita — no re-validar
+        if (appointment.getAppointmentId() != 0) {
+            return;
+        }
+
         String specialty = doctorSpecialtyPort.getSpecialtyByDoctorId(appointment.getDoctorId());
 
         if ("Consulta General".equalsIgnoreCase(specialty)) {
@@ -49,7 +51,7 @@ public class MedicinaGeneralValidator implements AppointmentValidator {
         }
 
         if (!hasConsultaGeneral) {
-            throw new IllegalArgumentException(
+            throw new AppointmentValidationException(
                     "Debes tener al menos una cita con Consulta General antes de acceder a otros servicios");
         }
     }

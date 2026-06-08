@@ -63,6 +63,14 @@ public class PatientService {
     }
 
     /**
+     * Busca un paciente por su correo electrónico (fallback cuando userId no está en el JWT).
+     */
+    public Patient findByEmail(String email) {
+        return patientRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Paciente no encontrado"));
+    }
+
+    /**
      * Lista todos los pacientes del sistema.
      */
     public List<Patient> listAll() {

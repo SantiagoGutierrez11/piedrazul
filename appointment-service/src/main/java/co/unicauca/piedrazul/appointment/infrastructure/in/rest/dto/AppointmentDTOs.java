@@ -1,6 +1,7 @@
 package co.unicauca.piedrazul.appointment.infrastructure.in.rest.dto;
 
 import co.unicauca.piedrazul.appointment.domain.model.AppointmentStatus;
+import co.unicauca.piedrazul.appointment.domain.model.ServiceType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
@@ -17,6 +18,9 @@ public class AppointmentDTOs {
             @Positive(message = "El ID del médico debe ser positivo")
             int doctorId,
 
+            @NotNull(message = "El nombre del doctor no puede estar vacio")
+            String doctorName,
+
             @Positive(message = "El ID del paciente debe ser positivo")
             int patientId,
 
@@ -30,11 +34,20 @@ public class AppointmentDTOs {
             LocalTime endTime,
 
             String reason,
-            String notes
+            String notes,
+
+            @NotNull(message = "El tipo de servicio es obligatorio")
+            ServiceType serviceType
     ) {}
 
     public record RescheduleAppointmentRequest(
             Integer newDoctorId,   // opcional: nuevo profesional/servicio (si se cambia)
+
+            @NotNull(message = "El nombre del doctor no puede estar vacio")
+            String doctorName,
+
+            @NotNull(message = "El tipo de servicio es obligatorio")
+            ServiceType serviceType,
 
             @NotNull(message = "La nueva fecha es obligatoria")
             LocalDate newDate,
@@ -49,13 +62,15 @@ public class AppointmentDTOs {
     public record AppointmentResponse(
             int appointmentId,
             int doctorId,
+            String doctorName,
             int patientId,
             LocalDate date,
             LocalTime startTime,
             LocalTime endTime,
             AppointmentStatus status,
             String reason,
-            String notes
+            String notes,
+            ServiceType serviceType
     ) {}
 
     public record MessageResponse(String message) {}

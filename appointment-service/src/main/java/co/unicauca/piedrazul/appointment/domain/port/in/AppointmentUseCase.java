@@ -1,6 +1,7 @@
 package co.unicauca.piedrazul.appointment.domain.port.in;
 
 import co.unicauca.piedrazul.appointment.domain.model.Appointment;
+import co.unicauca.piedrazul.appointment.domain.model.ServiceType;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -14,7 +15,8 @@ public interface AppointmentUseCase {
 
     Appointment scheduleAppointment(Appointment appointment);
 
-    Appointment rescheduleAppointment(int appointmentId, Integer newDoctorId, LocalDate newDate,
+    Appointment rescheduleAppointment(int appointmentId, Integer newDoctorId, String doctorName,
+                                      ServiceType serviceType, LocalDate newDate,
                                       LocalTime newStartTime, LocalTime newEndTime);
 
     Appointment cancelAppointment(int appointmentId);

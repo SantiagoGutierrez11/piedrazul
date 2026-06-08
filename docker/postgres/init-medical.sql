@@ -3,14 +3,23 @@
 -- Base de datos: medical_db
 -- ============================================================
 
+CREATE TABLE IF NOT EXISTS doct_type (
+    doct_type_id   SERIAL,
+    doct_type_name VARCHAR(100) NOT NULL,
+    CONSTRAINT pk_doc_type  PRIMARY KEY (doct_type_id),
+    CONSTRAINT uk_type_name UNIQUE (doct_type_name)
+);
+
 CREATE TABLE IF NOT EXISTS doctors (
     doct_user_id         INTEGER      NOT NULL,
     doct_professional_id VARCHAR(50)  NOT NULL,
     doct_first_name      VARCHAR(100) NOT NULL,
     doct_first_surname   VARCHAR(100) NOT NULL,
-    CONSTRAINT pk_doctors PRIMARY KEY (doct_user_id),
-    CONSTRAINT uk_doct_professional_id UNIQUE (doct_professional_id)
-    );
+    doct_type_id         INTEGER      NOT NULL,
+    CONSTRAINT pk_doctors            PRIMARY KEY (doct_user_id),
+    CONSTRAINT uk_doct_professional_id UNIQUE (doct_professional_id),
+    CONSTRAINT fk_doct_type          FOREIGN KEY (doct_type_id) REFERENCES doct_type (doct_type_id)
+);
 
 CREATE TABLE IF NOT EXISTS specialties (
     spec_id SERIAL,
@@ -50,24 +59,28 @@ CREATE TABLE IF NOT EXISTS system_parameters (
 -- DATOS DE PRUEBA
 -- ============================================================
 
--- Servicios que ofrece el centro médico
-INSERT INTO specialties (spec_name) VALUES ('Consulta General') ON CONFLICT (spec_name) DO NOTHING;
-INSERT INTO specialties (spec_name) VALUES ('Terapia Neural')   ON CONFLICT (spec_name) DO NOTHING;
-INSERT INTO specialties (spec_name) VALUES ('Quiropraxia')      ON CONFLICT (spec_name) DO NOTHING;
+-- Tipos de profesional
+INSERT INTO doct_type (doct_type_name) VALUES ('Médico')    ON CONFLICT (doct_type_name) DO NOTHING;
+INSERT INTO doct_type (doct_type_name) VALUES ('Terapeuta') ON CONFLICT (doct_type_name) DO NOTHING;
+
+-- Especialidades adicionales de los profesionales (Consulta General y Fisioterapia son servicios base, no requieren especialidad)
+INSERT INTO specialties (spec_name) VALUES ('Terapia Neural') ON CONFLICT (spec_name) DO NOTHING;
+INSERT INTO specialties (spec_name) VALUES ('Quiropraxia')    ON CONFLICT (spec_name) DO NOTHING;
+INSERT INTO specialties (spec_name) VALUES ('Fisioterapia')   ON CONFLICT (spec_name) DO NOTHING;
 
 -- ------------------------------------------------------------
 -- Médicos (deben coincidir con los usuarios DOCTOR de identity)
 -- ------------------------------------------------------------
-INSERT INTO doctors (doct_user_id, doct_professional_id, doct_first_name, doct_first_surname)
-VALUES (1000000002, 'MED-001', 'Juan', 'Pérez')
+INSERT INTO doctors (doct_user_id, doct_professional_id, doct_first_name, doct_first_surname, doct_type_id)
+VALUES (1000000002, 'MED-001', 'Juan', 'Pérez', (SELECT doct_type_id FROM doct_type WHERE doct_type_name = 'Médico'))
 ON CONFLICT (doct_user_id) DO NOTHING;
 
-INSERT INTO doctors (doct_user_id, doct_professional_id, doct_first_name, doct_first_surname)
+INSERT INTO doctors (doct_user_id, doct_professional_id, doct_first_name, doct_first_surname, doct_type_id)
 VALUES
-    (1000000005, 'MED-002', 'Ana', 'Martínez'),
-    (1000000006, 'MED-003', 'Pedro', 'Gómez'),
-    (1000000007, 'MED-004', 'Laura', 'Torres'),
-    (1000000008, 'MED-005', 'Miguel', 'Castro')
+    (1000000005, 'MED-002', 'Ana',    'Martínez', (SELECT doct_type_id FROM doct_type WHERE doct_type_name = 'Médico')),
+    (1000000006, 'MED-003', 'Pedro',  'Gómez',    (SELECT doct_type_id FROM doct_type WHERE doct_type_name = 'Médico')),
+    (1000000007, 'MED-004', 'Laura',  'Torres',   (SELECT doct_type_id FROM doct_type WHERE doct_type_name = 'Médico')),
+    (1000000008, 'MED-005', 'Miguel', 'Castro',   (SELECT doct_type_id FROM doct_type WHERE doct_type_name = 'Médico'))
 ON CONFLICT (doct_user_id) DO NOTHING;
 
 -- ------------------------------------------------------------
@@ -77,15 +90,7 @@ ON CONFLICT (doct_user_id) DO NOTHING;
 --   (que además atienden los otros dos servicios).
 -- ------------------------------------------------------------
 
--- Todos los médicos → Consulta General + Terapia Neural
-INSERT INTO doctor_specialties (ds_doct_id, ds_spec_id)
-SELECT d.doct_user_id, s.spec_id
-FROM doctors d
-CROSS JOIN specialties s
-WHERE s.spec_name IN ('Consulta General', 'Terapia Neural')
-ON CONFLICT DO NOTHING;
-
--- Especialistas en Quiropraxia (Pedro Gómez y Miguel Castro)
+-- Especialistas en Quiropraxia: Pedro Gómez (1000000006) y Miguel Castro (1000000008)
 INSERT INTO doctor_specialties (ds_doct_id, ds_spec_id)
 SELECT d.doct_user_id, s.spec_id
 FROM doctors d
@@ -93,6 +98,9 @@ CROSS JOIN specialties s
 WHERE s.spec_name = 'Quiropraxia'
   AND d.doct_user_id IN (1000000006, 1000000008)
 ON CONFLICT DO NOTHING;
+
+-- Nota: Consulta General y Fisioterapia son servicios base.
+-- Todo profesional puede atenderlos sin especialidad registrada.
 
 -- ============================================================
 -- HORARIOS DE MÉDICOS (Lunes=1 ... Domingo=7, ISO 8601)

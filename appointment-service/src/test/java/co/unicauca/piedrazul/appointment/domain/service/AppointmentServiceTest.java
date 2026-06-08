@@ -1,5 +1,6 @@
 package co.unicauca.piedrazul.appointment.domain.service;
 
+import co.unicauca.piedrazul.appointment.domain.exception.AppointmentNotFoundException;
 import co.unicauca.piedrazul.appointment.domain.model.Appointment;
 import co.unicauca.piedrazul.appointment.domain.model.AppointmentStatus;
 import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentEventPort;
@@ -23,7 +24,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Pruebas unitarias para AppointmentService.
- * Verifica la lógica de negocio del servicio de citas.
+ * Verifica la lógica de orquestación del servicio de citas.
  */
 @ExtendWith(MockitoExtension.class)
 class AppointmentServiceTest {
@@ -38,11 +39,7 @@ class AppointmentServiceTest {
     @BeforeEach
     void setUp() {
         appointmentService = new AppointmentService(
-                repositoryPort,
-                eventPort,
-                manualScheduling,
-                rescheduleScheduling
-        );
+                repositoryPort, eventPort, manualScheduling, rescheduleScheduling);
     }
 
     private Appointment buildAppointment(int id, AppointmentStatus status) {
@@ -89,10 +86,10 @@ class AppointmentServiceTest {
     }
 
     @Test
-    void cancelAppointment_citaNoExiste_lanzaExcepcion() {
+    void cancelAppointment_citaNoExiste_lanzaAppointmentNotFoundException() {
         when(repositoryPort.findById(99)).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(AppointmentNotFoundException.class,
                 () -> appointmentService.cancelAppointment(99));
     }
 
@@ -124,11 +121,11 @@ class AppointmentServiceTest {
     }
 
     @Test
-    void findById_citaNoExiste_lanzaExcepcion() {
+    void findById_citaNoExiste_lanzaAppointmentNotFoundException() {
         when(repositoryPort.findById(99)).thenReturn(Optional.empty());
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        AppointmentNotFoundException ex = assertThrows(
+                AppointmentNotFoundException.class,
                 () -> appointmentService.findById(99)
         );
         assertEquals("Cita no encontrada con ID: 99", ex.getMessage());

@@ -4,9 +4,15 @@ import { medicalApi, appointmentApi, patientApi, identityApi } from '../../api'
 
 const STATUSES = ['AGENDADA', 'ATENDIDA', 'CANCELADA', 'REAGENDADA']
 
+const SERVICE_TYPE_LABELS = {
+  CONSULTA_GENERAL: 'Consulta General',
+  FISIOTERAPIA:     'Fisioterapia',
+  QUIROPRAXIA:      'Quiropraxia',
+  TERAPIA_NEURAL:   'Terapia Neural',
+}
+
 export default function ExportAppointmentsPage() {
   const [doctors,       setDoctors]       = useState([])
-  const [specialties,   setSpecialties]   = useState([])
   const [appointments,  setAppointments]  = useState([])
   const [patientInfo,   setPatientInfo]   = useState({}) // {id: {name, phone}}
   const [loading,       setLoading]       = useState(false)
@@ -20,20 +26,14 @@ export default function ExportAppointmentsPage() {
     doctorId:  '',
   })
 
-  // Cargar médicos y especialidades al montar
+  // Cargar médicos al montar
   useEffect(() => {
     medicalApi.listDoctors().then(res => {
-      const docs = res.data || []
-      setDoctors(docs)
-      const specSet = new Set()
-      docs.forEach(d => d.specialties?.forEach(s => specSet.add(s)))
-      setSpecialties([...specSet].sort())
+      setDoctors(res.data || [])
     }).catch(() => {})
   }, [])
 
-  const doctorsBySpecialty = filters.specialty
-    ? doctors.filter(d => d.specialties?.includes(filters.specialty))
-    : doctors
+  const doctorsBySpecialty = doctors
 
   const handleFilter = (field, value) => {
     setFilters(prev => ({
@@ -55,12 +55,7 @@ export default function ExportAppointmentsPage() {
       if (filters.to)       apts = apts.filter(a => a.date <= filters.to)
       if (filters.status)   apts = apts.filter(a => a.status === filters.status)
       if (filters.doctorId) apts = apts.filter(a => a.doctorId === parseInt(filters.doctorId))
-      if (filters.specialty) {
-        const ids = new Set(
-          doctors.filter(d => d.specialties?.includes(filters.specialty)).map(d => d.id)
-        )
-        apts = apts.filter(a => ids.has(a.doctorId))
-      }
+      if (filters.specialty) apts = apts.filter(a => a.serviceType === filters.specialty)
 
       // Ordenar por fecha y hora
       apts.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
@@ -107,7 +102,7 @@ export default function ExportAppointmentsPage() {
         `"${getPatientName(a.patientId).replace(/"/g, '""')}"`,
         getPatientPhone(a.patientId),
         `"${getDoctorName(a.doctorId).replace(/"/g, '""')}"`,
-        `"${(doc?.specialties?.[0] || '').replace(/"/g, '""')}"`,
+        `"${(SERVICE_TYPE_LABELS[a.serviceType] || a.serviceType || '').replace(/"/g, '""')}"`,
         a.date,
         formatTime(a.startTime),
         formatTime(a.endTime),
@@ -189,12 +184,14 @@ export default function ExportAppointmentsPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Especialidad</label>
+              <label className="block text-xs text-gray-500 mb-1">Tipo de servicio</label>
               <select value={filters.specialty} onChange={e => handleFilter('specialty', e.target.value)}
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm
                                  focus:outline-none focus:border-blue-500 transition-colors">
-                <option value="">Todas</option>
-                {specialties.map(s => <option key={s} value={s}>{s}</option>)}
+                <option value="">Todos</option>
+                {Object.entries(SERVICE_TYPE_LABELS).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
               </select>
             </div>
 

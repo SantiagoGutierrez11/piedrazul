@@ -29,11 +29,9 @@ public class PatientDTOs {
 
             String lastName,
 
-            @NotBlank(message = "El correo es obligatorio")
-            String email,
+            String email,     // opcional — si se provee, se crea cuenta Keycloak
 
-            @NotBlank(message = "La contraseña es obligatoria")
-            String password,
+            String password,  // opcional — obligatorio solo si hay correo
 
             @NotBlank(message = "El teléfono es obligatorio")
             String phone,
@@ -44,6 +42,33 @@ public class PatientDTOs {
             String birthDay,
             String birthMonth,
             String birthYear
+    ) {}
+
+    // --- Request: Registro de usuario ---
+    public record PatientRegisterRequest(
+            @NotBlank(message = "El primer nombre es obligatorio")
+            String firstName,
+
+            String middleName,
+
+            @NotBlank(message = "El apellido es obligatorio")
+            String firstSurname,
+
+            String lastName,
+
+            @NotBlank(message = "El correo es obligatorio")
+            String username,
+
+            @NotBlank(message = "La contraseña es obligatoria")
+            String password,
+
+            @NotBlank(message = "El tipo de documento es obligatorio")
+            String userTypeId,
+
+            int userId,
+
+            @NotBlank(message = "El rol es obligatorio")
+            String roleName
     ) {}
 
     // --- Request: Registro por agendador (RF2) — fecha y correo opcionales ---

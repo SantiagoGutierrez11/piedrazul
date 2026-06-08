@@ -1,7 +1,8 @@
 package co.unicauca.piedrazul.appointment.domain.service;
 
+import co.unicauca.piedrazul.appointment.domain.exception.AppointmentNotFoundException;
 import co.unicauca.piedrazul.appointment.domain.model.Appointment;
-import co.unicauca.piedrazul.appointment.domain.model.AppointmentStatus;
+import co.unicauca.piedrazul.appointment.domain.model.ServiceType;
 import co.unicauca.piedrazul.appointment.domain.port.in.AppointmentUseCase;
 import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentEventPort;
 import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentRepositoryPort;
@@ -15,25 +16,24 @@ import java.time.LocalTime;
 import java.util.List;
 
 /**
- * Servicio de dominio para gestión de citas médicas.
- * Implementa el puerto de entrada AppointmentUseCase.
- * Depende solo de puertos de salida — sin Spring Data ni RabbitMQ directamente.
+ * Servicio de aplicación que implementa el puerto de entrada AppointmentUseCase.
+ * Orquesta los objetos de dominio; las invariantes de estado viven en el agregado Appointment.
  */
 @Service
 public class AppointmentService implements AppointmentUseCase {
 
-    private final AppointmentRepositoryPort       repositoryPort;
-    private final AppointmentEventPort            eventPort;
-    private final ManualAppointmentScheduling     manualScheduling;
+    private final AppointmentRepositoryPort repositoryPort;
+    private final AppointmentEventPort eventPort;
+    private final ManualAppointmentScheduling manualScheduling;
     private final RescheduleAppointmentScheduling rescheduleScheduling;
 
     public AppointmentService(AppointmentRepositoryPort repositoryPort,
                                AppointmentEventPort eventPort,
                                ManualAppointmentScheduling manualScheduling,
                                RescheduleAppointmentScheduling rescheduleScheduling) {
-        this.repositoryPort       = repositoryPort;
-        this.eventPort            = eventPort;
-        this.manualScheduling     = manualScheduling;
+        this.repositoryPort = repositoryPort;
+        this.eventPort = eventPort;
+        this.manualScheduling = manualScheduling;
         this.rescheduleScheduling = rescheduleScheduling;
     }
 
@@ -45,11 +45,18 @@ public class AppointmentService implements AppointmentUseCase {
 
     @Override
     @Transactional
-    public Appointment rescheduleAppointment(int appointmentId, Integer newDoctorId, LocalDate newDate,
+    public Appointment rescheduleAppointment(int appointmentId, Integer newDoctorId, String doctorName,
+                                              ServiceType serviceType, LocalDate newDate,
                                               LocalTime newStartTime, LocalTime newEndTime) {
         Appointment appointment = findById(appointmentId);
         if (newDoctorId != null && newDoctorId > 0) {
-            appointment.setDoctorId(newDoctorId);   // permite cambiar de profesional/servicio
+            appointment.setDoctorId(newDoctorId);
+        }
+        if (doctorName != null && !doctorName.isBlank()) {
+            appointment.setDoctorName(doctorName);
+        }
+        if (serviceType != null) {
+            appointment.setServiceType(serviceType);
         }
         appointment.setDate(newDate);
         appointment.setStartTime(newStartTime);
@@ -61,7 +68,7 @@ public class AppointmentService implements AppointmentUseCase {
     @Transactional
     public Appointment cancelAppointment(int appointmentId) {
         Appointment appointment = findById(appointmentId);
-        appointment.setStatus(AppointmentStatus.CANCELADA);
+        appointment.cancel();
         Appointment saved = repositoryPort.save(appointment);
         eventPort.publishAppointmentEvent(saved);
         return saved;
@@ -71,7 +78,7 @@ public class AppointmentService implements AppointmentUseCase {
     @Transactional
     public Appointment markAsAttended(int appointmentId) {
         Appointment appointment = findById(appointmentId);
-        appointment.setStatus(AppointmentStatus.ATENDIDA);
+        appointment.markAsAttended();
         Appointment saved = repositoryPort.save(appointment);
         eventPort.publishAppointmentEvent(saved);
         return saved;
@@ -80,7 +87,7 @@ public class AppointmentService implements AppointmentUseCase {
     @Override
     public Appointment findById(int appointmentId) {
         return repositoryPort.findById(appointmentId)
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new AppointmentNotFoundException(
                         "Cita no encontrada con ID: " + appointmentId));
     }
 

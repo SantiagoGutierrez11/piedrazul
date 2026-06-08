@@ -1,6 +1,7 @@
 package co.unicauca.piedrazul.appointment.domain.service.builder;
 
 import co.unicauca.piedrazul.appointment.domain.model.Appointment;
+import co.unicauca.piedrazul.appointment.domain.model.ServiceType;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -11,11 +12,13 @@ import java.time.LocalTime;
 public interface IAppointmentBuilder {
 
     IAppointmentBuilder doctorId(int doctorId);
+    IAppointmentBuilder doctorName(String doctorName);
     IAppointmentBuilder patientId(int patientId);
     IAppointmentBuilder date(LocalDate date);
     IAppointmentBuilder startTime(LocalTime startTime);
     IAppointmentBuilder endTime(LocalTime endTime);
     IAppointmentBuilder reason(String reason);
     IAppointmentBuilder notes(String notes);
+    IAppointmentBuilder serviceType(ServiceType serviceType);
     Appointment build();
 }

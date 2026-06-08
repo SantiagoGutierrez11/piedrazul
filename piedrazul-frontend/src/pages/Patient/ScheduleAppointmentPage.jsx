@@ -1,10 +1,25 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PatientLayout from '../../components/PatientLayout'
-import { medicalApi, appointmentApi } from '../../api'
+import { medicalApi, appointmentApi, patientApi } from '../../api'
 import { useAuth } from '../../api/AuthContext'
 
-const STEPS = ['Especialidad', 'Profesional', 'Fecha y Hora', 'Confirmación']
+const STEPS = ['Tipo de servicio', 'Profesional', 'Fecha y Hora', 'Confirmación']
+
+// ── Tipos de servicio hardcodeados (igual que en CreateAppointmentPage) ────────
+const SERVICE_TYPES = ['Consulta General', 'Fisioterapia', 'Quiropraxia', 'Terapia Neural']
+const SERVICE_TYPE_TO_ENUM = {
+    'Consulta General': 'CONSULTA_GENERAL',
+    'Fisioterapia':     'FISIOTERAPIA',
+    'Quiropraxia':      'QUIROPRAXIA',
+    'Terapia Neural':   'TERAPIA_NEURAL',
+}
+function filterDoctorsByService(service, allDocs) {
+    if (!service) return []
+    if (service === 'Quiropraxia')    return allDocs.filter(d => d.specialties?.includes('Quiropraxia'))
+    if (service === 'Terapia Neural') return allDocs.filter(d => d.specialties?.includes('Terapia Neural'))
+    return allDocs.filter(d => !d.specialties?.length)
+}
 const DAYS   = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -41,6 +56,7 @@ export default function ScheduleAppointmentPage() {
     const [success, setSuccess]                 = useState(false)
     const [errorMsg, setErrorMsg]               = useState('')
 
+    const [patientId,           setPatientId]           = useState(null) // integer resuelto via /patients/me
     const [isFirstAppointment, setIsFirstAppointment] = useState(false)
     const [hasActiveAppointment, setHasActiveAppointment] = useState(false)
 
@@ -54,41 +70,50 @@ export default function ScheduleAppointmentPage() {
     const [calMonth, setCalMonth] = useState(today.getMonth())
 
     useEffect(() => {
-        if (!user?.id) return
+        if (!user) return
         setLoading(true)
-        Promise.all([
-            medicalApi.listDoctors(),
-            appointmentApi.listByPatient(user.id).catch(() => ({ data: [] })),
-        ]).then(([docsRes, aptsRes]) => {
-            const docs = docsRes.data || []
-            const apts = aptsRes.data || []
-            setAllDoctors(docs)
+        // Paso 1: resolver el patientId real (integer) vía /patients/me
+        patientApi.getMe()
+            .then(meRes => {
+                const realId = meRes.data?.id
+                setPatientId(realId)
+                // Paso 2: cargar médicos + citas del paciente en paralelo
+                return Promise.all([
+                    medicalApi.listDoctors(),
+                    realId
+                        ? appointmentApi.listByPatient(realId).catch(() => ({ data: [] }))
+                        : Promise.resolve({ data: [] }),
+                ])
+            })
+            .then(([docsRes, aptsRes]) => {
+                const docs = docsRes.data || []
+                const apts = aptsRes.data || []
+                setAllDoctors(docs)
 
-            const firstAppointment = apts.length === 0
-            setIsFirstAppointment(firstAppointment)
+                const hasConsultaGeneral = apts.some(a => a.serviceType === 'CONSULTA_GENERAL')
+                const firstAppointment   = apts.length === 0 || !hasConsultaGeneral
+                setIsFirstAppointment(firstAppointment)
 
-            // Verificar si tiene cita activa (AGENDADA o REAGENDADA)
-            const activeApt = apts.some(a => a.status === 'AGENDADA' || a.status === 'REAGENDADA')
-            setHasActiveAppointment(activeApt)
+                const activeApt = apts.some(a => a.status === 'AGENDADA' || a.status === 'REAGENDADA')
+                setHasActiveAppointment(activeApt)
 
-            const specSet = new Set()
-            docs.forEach(d => d.specialties?.forEach(s => specSet.add(s)))
-            let allSpecs = [...specSet].map(name => ({ name }))
-            if (firstAppointment) {
-                allSpecs = allSpecs.filter(s => s.name.toLowerCase() === 'consulta general')
-            }
-            setSpecialties(allSpecs)
-        }).catch(() => { setAllDoctors([]); setSpecialties([]) })
+                // Especialidades disponibles según historial del paciente
+                const availableServices = firstAppointment
+                    ? SERVICE_TYPES.filter(s => s === 'Consulta General')
+                    : SERVICE_TYPES
+                setSpecialties(availableServices.map(name => ({ name })))
+            })
+            .catch(() => { setAllDoctors([]); setSpecialties([]) })
             .finally(() => setLoading(false))
     }, [user])
 
     useEffect(() => {
         if (!selectedSpecialty) return
-        const matching = allDoctors.filter(d => d.specialties?.includes(selectedSpecialty.name))
 
-        // Quiropraxia: solo médicos disponibles (activos) y CON horario definido
+        // Quiropraxia: filtrar además por médicos con horario definido
         if (selectedSpecialty.name === 'Quiropraxia') {
-            let cancelled = false
+            const matching = filterDoctorsByService('Quiropraxia', allDoctors)
+            let cancelled  = false
             Promise.all(matching.map(async d => {
                 try {
                     const res = await medicalApi.getDoctorSchedule(d.id)
@@ -98,7 +123,7 @@ export default function ScheduleAppointmentPage() {
             return () => { cancelled = true }
         }
 
-        setDoctors(matching)
+        setDoctors(filterDoctorsByService(selectedSpecialty.name, allDoctors))
     }, [selectedSpecialty, allDoctors])
 
     useEffect(() => {
@@ -107,8 +132,15 @@ export default function ScheduleAppointmentPage() {
         Promise.all([
             medicalApi.getAvailability(selectedDoctor.id, selectedDate),
             medicalApi.getDoctorSchedule(selectedDoctor.id),
-        ]).then(([availRes, schedRes]) => {
-            setAvailability(availRes.data || [])
+            appointmentApi.listByDoctorAndDate(selectedDoctor.id, selectedDate).catch(() => ({ data: [] })),
+        ]).then(([availRes, schedRes, aptsRes]) => {
+            const allSlots    = availRes.data || []
+            const bookedTimes = new Set(
+                (aptsRes.data || [])
+                    .filter(a => a.status !== 'CANCELADA')
+                    .map(a => (a.startTime || '').substring(0, 5))
+            )
+            setAvailability(allSlots.filter(s => !bookedTimes.has(s.substring(0, 5))))
             const schedules = schedRes.data || []
             if (schedules.length > 0) setIntervalMinutes(schedules[0].intervalMinutes || 30)
         }).catch(() => setAvailability([]))
@@ -134,13 +166,15 @@ export default function ScheduleAppointmentPage() {
         setErrorMsg('')
         try {
             await appointmentApi.create({
-                patientId: user?.id,
-                doctorId:  selectedDoctor.id,
-                date:      selectedDate,
-                startTime: selectedTime,
-                endTime:   addMinutes(selectedTime, intervalMinutes),
-                reason:    selectedSpecialty.name,
-                notes:     '',
+                patientId:   patientId || parseInt(user?.id) || 0,
+                doctorId:    selectedDoctor.id,
+                doctorName:  selectedDoctor.displayName || selectedDoctor.fullName || `Profesional ${selectedDoctor.id}`,
+                serviceType: SERVICE_TYPE_TO_ENUM[selectedSpecialty.name] || 'CONSULTA_GENERAL',
+                date:        selectedDate,
+                startTime:   selectedTime,
+                endTime:     addMinutes(selectedTime, intervalMinutes),
+                reason:      selectedSpecialty.name,
+                notes:       '',
             })
             setSuccess(true)
             setTimeout(() => navigate('/patient/appointments'), 2500)
@@ -269,11 +303,11 @@ export default function ScheduleAppointmentPage() {
 
                     {step === 0 && (
                         <div>
-                            <h2 className="font-semibold text-gray-800 mb-4">Selecciona una especialidad</h2>
+                            <h2 className="font-semibold text-gray-800 mb-4">Selecciona un tipo de servicio</h2>
                             {loading ? (
-                                <p className="text-gray-400 text-sm text-center py-8">Cargando especialidades...</p>
+                                <p className="text-gray-400 text-sm text-center py-8">Cargando servicios...</p>
                             ) : specialties.length === 0 ? (
-                                <p className="text-gray-400 text-sm text-center py-8">No hay especialidades disponibles</p>
+                                <p className="text-gray-400 text-sm text-center py-8">No hay servicios disponibles</p>
                             ) : (
                                 <div className="grid grid-cols-3 gap-4">
                                     {specialties.map(spec => (
@@ -403,7 +437,7 @@ export default function ScheduleAppointmentPage() {
                             <h2 className="font-semibold text-gray-800 mb-4">Confirma tu cita</h2>
                             <div className="divide-y divide-gray-50 rounded-2xl border border-gray-100">
                                 {[
-                                    { label: 'Especialidad', value: selectedSpecialty?.name },
+                                    { label: 'Tipo de servicio', value: selectedSpecialty?.name },
                                     { label: 'Profesional',  value: selectedDoctor?.displayName || selectedDoctor?.fullName },
                                     { label: 'Fecha',        value: formatDateDisplay(selectedDate) },
                                     { label: 'Hora',         value: selectedTime },
