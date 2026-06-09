@@ -17,9 +17,9 @@ public class Appointment {
     private LocalTime startTime;
     private LocalTime endTime;
     private AppointmentStatus status;
-    private int doctorId;
+    private long doctorId;
     private String doctorName;
-    private int patientId;
+    private long patientId;
     private String reason;
     private String notes;
     private ServiceType serviceType;
@@ -89,12 +89,12 @@ public class Appointment {
     public void setEndTime(LocalTime endTime) { this.endTime = endTime; }
     public AppointmentStatus getStatus() { return status; }
     public void setStatus(AppointmentStatus status)   { this.status = status; }
-    public int getDoctorId() { return doctorId; }
-    public void setDoctorId(int doctorId) { this.doctorId = doctorId; }
+    public long getDoctorId() { return doctorId; }
+    public void setDoctorId(long doctorId) { this.doctorId = doctorId; }
     public String getDoctorName() { return doctorName; }
     public void setDoctorName(String doctorName) { this.doctorName = doctorName; }
-    public int getPatientId() { return patientId; }
-    public void setPatientId(int patientId)           { this.patientId = patientId; }
+    public long getPatientId() { return patientId; }
+    public void setPatientId(long patientId)           { this.patientId = patientId; }
     public String getReason() { return reason; }
     public void setReason(String reason)              { this.reason = reason; }
     public String getNotes() { return notes; }

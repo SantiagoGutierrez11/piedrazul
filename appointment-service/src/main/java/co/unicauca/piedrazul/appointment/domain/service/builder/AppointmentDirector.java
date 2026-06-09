@@ -22,7 +22,7 @@ public class AppointmentDirector {
      * Cita creada manualmente por el agendador.
      * Todos los campos son relevantes, incluyendo reason y notes.
      */
-    public Appointment buildManualAppointment(int doctorId, String doctorName, int patientId,
+    public Appointment buildManualAppointment(long doctorId, String doctorName, long patientId,
                                               LocalDate date, LocalTime startTime, LocalTime endTime,
                                               String reason, String notes, ServiceType serviceType) {
         return new AppointmentBuilder()
@@ -42,7 +42,7 @@ public class AppointmentDirector {
      * Cita agendada por el paciente desde la web.
      * El reason se fija automáticamente; no incluye notas.
      */
-    public Appointment buildWebAppointment(int doctorId, String doctorName, int patientId,
+    public Appointment buildWebAppointment(long doctorId, String doctorName, long patientId,
                                            LocalDate date, LocalTime startTime, LocalTime endTime, ServiceType serviceType) {
         return new AppointmentBuilder()
                 .doctorId(doctorId)
@@ -61,7 +61,7 @@ public class AppointmentDirector {
      * El slot (doctor, fecha y hora) proviene del algoritmo de disponibilidad.
      * No requiere reason ni notes del usuario.
      */
-    public Appointment buildAutonomousAppointment(int doctorId, String doctorName, int patientId,
+    public Appointment buildAutonomousAppointment(long doctorId, String doctorName, long patientId,
                                                    LocalDate date, LocalTime startTime, LocalTime endTime, ServiceType serviceType) {
         return new AppointmentBuilder()
                 .doctorId(doctorId)

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../../components/Layout'
-import { appointmentApi, patientApi, identityApi } from '../../api'
+import { appointmentApi, patientApi, identityApi, medicalApi } from '../../api'
+import { useAuth } from '../../api/AuthContext'
 
 const STATUS_STYLES = {
   AGENDADA:   'bg-green-100 text-green-700',
@@ -19,65 +20,85 @@ const SERVICE_TYPE_LABELS = {
   TERAPIA_NEURAL:   'Terapia Neural',
 }
 
+const STATUS_LABELS = {
+  AGENDADA:   'Agendada',
+  REAGENDADA: 'Reagendada',
+  ATENDIDA:   'Atendida',
+  CANCELADA:  'Cancelada',
+  PENDIENTE:  'Pendiente',
+  CONFIRMADA: 'Confirmada',
+}
+
 const PAGE_SIZE = 10
 const COLS = 7
 
 export default function AppointmentsPage() {
+  const { user, hasRole } = useAuth()
+  const isDoctor = hasRole('DOCTOR')
+
+  const [allDoctors,        setAllDoctors]        = useState([])
   const [selectedDate,      setSelectedDate]      = useState('')
+  const [selectedDoctor,    setSelectedDoctor]    = useState('')
   const [appointments,      setAppointments]      = useState([])
   const [patientCache,      setPatientCache]      = useState({})
   const [loading,           setLoading]           = useState(false)
-  const [searched,          setSearched]          = useState(false)
   const [currentPage,       setCurrentPage]       = useState(1)
-  const [filterDoctor,      setFilterDoctor]      = useState('')
   const [filterServiceType, setFilterServiceType] = useState('')
+  const [filterStatus,      setFilterStatus]      = useState('')
 
-  const handleSearch = async () => {
-    if (!selectedDate) return
-    setLoading(true)
-    setSearched(true)
-    setCurrentPage(1)
-    setFilterDoctor('')
-    setFilterServiceType('')
-    try {
-      const res  = await appointmentApi.listAll()
-      const apts = (res.data || []).filter(a => a.date === selectedDate)
-      setAppointments(apts)
+  // Cargar médicos al montar; si es DOCTOR, pre-seleccionarlo
+  useEffect(() => {
+    medicalApi.listDoctors()
+      .then(res => setAllDoctors(res.data || []))
+      .catch(() => {})
+    if (isDoctor && user?.id) setSelectedDoctor(String(user.id))
+  }, [])
 
-      const uniqueIds = [...new Set(apts.map(a => a.patientId).filter(Boolean))]
-      const cache     = { ...patientCache }
-
-      await Promise.all(uniqueIds.map(async id => {
-        if (cache[id]) return
-        try {
-          const [idRes, patRes] = await Promise.all([
-            identityApi.getUserById(id).catch(() => null),
-            patientApi.getById(id).catch(() => null),
-          ])
-          cache[id] = {
-            name:  idRes?.data?.fullName || patRes?.data?.fullName || `Paciente ${id}`,
-            phone: patRes?.data?.phone   || '—',
-          }
-        } catch {
-          cache[id] = { name: `Paciente ${id}`, phone: '—' }
-        }
-      }))
-      setPatientCache(cache)
-    } catch {
+  // Auto-cargar citas cuando fecha Y médico estén seleccionados
+  useEffect(() => {
+    if (!selectedDate || !selectedDoctor) {
       setAppointments([])
-    } finally {
-      setLoading(false)
+      return
     }
-  }
+    setLoading(true)
+    setFilterServiceType('')
+    setFilterStatus('')
+    setCurrentPage(1)
 
-  // Médicos únicos que tienen citas ese día (se actualiza al buscar)
-  const doctorOptions = [...new Set(appointments.map(a => a.doctorName).filter(Boolean))].sort()
+    appointmentApi.listByDoctorAndDate(parseInt(selectedDoctor), selectedDate)
+      .then(async res => {
+        const apts = res.data || []
+        setAppointments(apts)
 
-  // Filtrado client-side
+        // Cargar nombres de pacientes
+        const uniqueIds = [...new Set(apts.map(a => a.patientId).filter(Boolean))]
+        const cache     = { ...patientCache }
+        await Promise.all(uniqueIds.map(async id => {
+          if (cache[id]) return
+          try {
+            const [idRes, patRes] = await Promise.all([
+              identityApi.getUserById(id).catch(() => null),
+              patientApi.getById(id).catch(() => null),
+            ])
+            cache[id] = {
+              name:  idRes?.data?.fullName || patRes?.data?.fullName || `Paciente ${id}`,
+              phone: patRes?.data?.phone   || '—',
+            }
+          } catch {
+            cache[id] = { name: `Paciente ${id}`, phone: '—' }
+          }
+        }))
+        setPatientCache(cache)
+      })
+      .catch(() => setAppointments([]))
+      .finally(() => setLoading(false))
+  }, [selectedDate, selectedDoctor])
+
+  // Filtrado client-side (tipo de servicio + estado)
   const filtered = appointments.filter(a => {
-    const matchDoctor  = !filterDoctor      || a.doctorName  === filterDoctor
     const matchService = !filterServiceType || a.serviceType === filterServiceType
-    return matchDoctor && matchService
+    const matchStatus  = !filterStatus      || a.status      === filterStatus
+    return matchService && matchStatus
   })
 
   // Paginación
@@ -90,6 +111,8 @@ export default function AppointmentsPage() {
     const [y, m, d] = dateStr.split('-')
     return `${d}/${m}/${y}`
   }
+
+  const hasResults = !!(selectedDate && selectedDoctor)
 
   return (
       <Layout>
@@ -106,60 +129,77 @@ export default function AppointmentsPage() {
             <div className="flex gap-4 items-end flex-wrap">
 
               {/* Fecha */}
-              <div className="flex-1 min-w-[150px] max-w-xs">
+              <div className="flex-1 min-w-[140px] max-w-[180px]">
                 <label className="block text-sm text-gray-500 mb-1">Fecha</label>
                 <input type="date" value={selectedDate}
-                       onChange={e => { setSelectedDate(e.target.value); setSearched(false); setAppointments([]) }}
+                       onChange={e => {
+                         setSelectedDate(e.target.value)
+                         if (!isDoctor) setSelectedDoctor('')
+                         setAppointments([])
+                       }}
                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm
                                   focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
 
-              {/* Médico — solo los que tienen citas ese día */}
-              <div className="flex-1 min-w-[150px] max-w-xs">
-                <label className="block text-sm text-gray-500 mb-1">Médico</label>
-                <select value={filterDoctor}
-                        disabled={!searched || loading}
-                        onChange={e => { setFilterDoctor(e.target.value); setCurrentPage(1) }}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm
-                                   focus:outline-none focus:border-blue-500 transition-colors bg-white
-                                   disabled:bg-gray-50 disabled:text-gray-400">
-                  <option value="">
-                    {searched ? 'Todos los médicos' : 'Busca primero una fecha'}
-                  </option>
-                  {doctorOptions.map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Médico — oculto para DOCTOR (ya está pre-seleccionado) */}
+              {!isDoctor && (
+                <div className="flex-1 min-w-[160px] max-w-xs">
+                  <label className="block text-sm text-gray-500 mb-1">Médico</label>
+                  <select value={selectedDoctor}
+                          disabled={!selectedDate}
+                          onChange={e => setSelectedDoctor(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm
+                                     focus:outline-none focus:border-blue-500 transition-colors bg-white
+                                     disabled:bg-gray-50 disabled:text-gray-400">
+                    <option value="">
+                      {selectedDate ? 'Selecciona un médico...' : 'Primero selecciona una fecha'}
+                    </option>
+                    {allDoctors.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.fullName || `Profesional ${d.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Tipo de cita */}
               <div className="flex-1 min-w-[150px] max-w-xs">
                 <label className="block text-sm text-gray-500 mb-1">Tipo de cita</label>
                 <select value={filterServiceType}
-                        disabled={!searched || loading}
+                        disabled={!hasResults || loading}
                         onChange={e => { setFilterServiceType(e.target.value); setCurrentPage(1) }}
                         className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm
                                    focus:outline-none focus:border-blue-500 transition-colors bg-white
                                    disabled:bg-gray-50 disabled:text-gray-400">
-                  <option value="">
-                    {searched ? 'Todos los tipos' : 'Busca primero una fecha'}
-                  </option>
-                  {searched && Object.entries(SERVICE_TYPE_LABELS).map(([val, label]) => (
+                  <option value="">Todos los tipos</option>
+                  {Object.entries(SERVICE_TYPE_LABELS).map(([val, label]) => (
                     <option key={val} value={val}>{label}</option>
                   ))}
                 </select>
               </div>
 
-              <button onClick={handleSearch} disabled={!selectedDate || loading}
-                      className="flex items-center gap-2 bg-blue-600 text-white rounded-xl px-6 py-2.5
-                                text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-40">
-                🔍 Buscar
-              </button>
+              {/* Estado */}
+              <div className="flex-1 min-w-[140px] max-w-xs">
+                <label className="block text-sm text-gray-500 mb-1">Estado</label>
+                <select value={filterStatus}
+                        disabled={!hasResults || loading}
+                        onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1) }}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm
+                                   focus:outline-none focus:border-blue-500 transition-colors bg-white
+                                   disabled:bg-gray-50 disabled:text-gray-400">
+                  <option value="">Todos los estados</option>
+                  {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
             </div>
           </div>
 
           {/* Tabla */}
-          {searched && (
+          {hasResults ? (
               <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
@@ -174,7 +214,7 @@ export default function AppointmentsPage() {
                   {loading ? (
                       <tr>
                         <td colSpan={COLS} className="text-center py-12 text-gray-400 text-sm">
-                          Buscando citas...
+                          Cargando citas...
                         </td>
                       </tr>
                   ) : paginated.length === 0 ? (
@@ -183,6 +223,7 @@ export default function AppointmentsPage() {
                           <p className="text-3xl mb-2">📅</p>
                           <p className="text-gray-400 text-sm">
                             No hay citas para el {formatDate(selectedDate)}
+                            {filterServiceType || filterStatus ? ' con los filtros aplicados' : ''}
                           </p>
                         </td>
                       </tr>
@@ -213,7 +254,7 @@ export default function AppointmentsPage() {
                               <td className="px-4 py-4">
                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold
                                     ${STATUS_STYLES[apt.status] || 'bg-gray-100 text-gray-600'}`}>
-                                  {apt.status}
+                                  {STATUS_LABELS[apt.status] || apt.status}
                                 </span>
                               </td>
                             </tr>
@@ -233,7 +274,7 @@ export default function AppointmentsPage() {
                         </span>{' '}
                         de{' '}
                         <span className="font-semibold text-gray-700">{filtered.length}</span> cita(s)
-                        {(filterDoctor || filterServiceType) && filtered.length !== appointments.length && (
+                        {(filterServiceType || filterStatus) && filtered.length !== appointments.length && (
                           <span className="text-gray-400"> (filtradas de {appointments.length})</span>
                         )}
                       </p>
@@ -267,19 +308,23 @@ export default function AppointmentsPage() {
                           </div>
                       )}
 
-                      <Link to="/appointments/new"
-                            className="text-sm text-blue-600 hover:underline font-medium">
-                        + Registrar nueva cita
-                      </Link>
+                      {!isDoctor && (
+                        <Link to="/appointments/new"
+                              className="text-sm text-blue-600 hover:underline font-medium">
+                          + Registrar nueva cita
+                        </Link>
+                      )}
                     </div>
                 )}
               </div>
-          )}
-
-          {!searched && (
+          ) : (
               <div className="text-center py-16 text-gray-400">
                 <p className="text-4xl mb-3">📅</p>
-                <p className="text-sm">Selecciona una fecha y presiona Buscar</p>
+                <p className="text-sm">
+                  {!selectedDate
+                    ? 'Selecciona una fecha para empezar'
+                    : 'Selecciona un médico para ver sus citas'}
+                </p>
               </div>
           )}
         </div>

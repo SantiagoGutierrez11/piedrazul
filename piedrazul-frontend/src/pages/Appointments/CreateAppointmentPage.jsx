@@ -25,7 +25,7 @@ function RegisterPatientModal({ documentId: initialDocumentId, onClose, onSucces
     firstSurname:    '',
     lastName:        '',
     phone:           '',
-    gender:          'Hombre',
+    gender:          '',
     email:           '',
     password:        '',
     confirmPassword: '',
@@ -48,13 +48,34 @@ function RegisterPatientModal({ documentId: initialDocumentId, onClose, onSucces
     if (!form.firstName.trim())    e.firstName    = 'Obligatorio'
     if (!form.firstSurname.trim()) e.firstSurname = 'Obligatorio'
     if (!form.phone.trim())        e.phone        = 'Obligatorio'
-    if (!form.birthDay || !form.birthMonth || !form.birthYear)
+    if (!form.gender)              e.gender       = 'Selecciona un género'
+
+    // Validación de fecha de nacimiento
+    if (!form.birthDay || !form.birthMonth || !form.birthYear) {
       e.birthDate = 'La fecha de nacimiento es obligatoria'
-    // Email y contraseña: opcionales, pero si hay correo → contraseña obligatoria
-    const hasEmail    = !!form.email.trim()
+    } else {
+      const day   = parseInt(form.birthDay)
+      const month = parseInt(form.birthMonth)
+      const year  = parseInt(form.birthYear)
+      const currentYear = new Date().getFullYear()
+      if (year < 1900 || year > currentYear) {
+        e.birthDate = `El año debe estar entre 1900 y ${currentYear}`
+      } else if (month < 1 || month > 12) {
+        e.birthDate = 'El mes debe estar entre 01 y 12'
+      } else if (day < 1 || day > 31) {
+        e.birthDate = 'El día debe estar entre 01 y 31'
+      } else {
+        const fecha = new Date(year, month - 1, day)
+        if (fecha > new Date()) {
+          e.birthDate = 'La fecha de nacimiento no puede ser en el futuro'
+        } else if (fecha.getDate() !== day || fecha.getMonth() !== month - 1) {
+          e.birthDate = 'Fecha inválida (verifica día y mes)'
+        }
+      }
+    }
+
+    // Contraseña: si se ingresa, debe confirmarse y coincidir
     const hasPassword = !!form.password
-    if (hasEmail && !hasPassword)
-      e.password = 'La contraseña es obligatoria si ingresas correo'
     if (hasPassword && !form.confirmPassword)
       e.confirmPassword = 'Confirma la contraseña'
     if (hasPassword && form.confirmPassword && form.password !== form.confirmPassword)
@@ -75,6 +96,9 @@ function RegisterPatientModal({ documentId: initialDocumentId, onClose, onSucces
     setSaving(true)
     setGlobalError('')
     try {
+      const emailFinal    = form.email.trim()    || `${form.documentId}@piedrazul.com`
+      const passwordFinal = form.password        || form.documentId
+
       await patientApi.registerWeb({
         documentId:   parseInt(form.documentId),
         userTypeId:   form.userTypeId,
@@ -82,8 +106,8 @@ function RegisterPatientModal({ documentId: initialDocumentId, onClose, onSucces
         middleName:   form.middleName.trim()   || null,
         firstSurname: form.firstSurname.trim(),
         lastName:     form.lastName.trim()     || null,
-        email:        form.email.trim()        || null,
-        password:     form.password            || null,
+        email:        emailFinal,
+        password:     passwordFinal,
         phone:        form.phone.trim(),
         gender:       form.gender,
         birthDay:     form.birthDay,
@@ -127,16 +151,21 @@ function RegisterPatientModal({ documentId: initialDocumentId, onClose, onSucces
                        onChange={e => set('documentId', e.target.value.replace(/\D/g, ''))}
                        placeholder="Ej: 1077156530"
                        className={cls('documentId')} />
-                {fieldErrors.documentId && <p className="text-red-500 text-xs mt-1">{fieldErrors.documentId}</p>}
+                {fieldErrors.documentId
+                  ? <p className="text-red-500 text-xs mt-1">{fieldErrors.documentId}</p>
+                  : <p className="text-gray-400 text-xs mt-1">Solo números, sin puntos ni espacios</p>}
               </div>
 
               {/* Género */}
               <div className="col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">Género <span className="text-red-500">*</span></label>
                 <select value={form.gender} onChange={e => set('gender', e.target.value)}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500
+                          ${fieldErrors.gender ? 'border-red-400' : 'border-gray-200'}`}>
+                  <option value="">Seleccione un género</option>
                   {['Hombre','Mujer','Otro'].map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
+                {fieldErrors.gender && <p className="text-red-500 text-xs mt-1">{fieldErrors.gender}</p>}
               </div>
 
               {/* Nombres */}
@@ -175,7 +204,9 @@ function RegisterPatientModal({ documentId: initialDocumentId, onClose, onSucces
                 <input value={form.phone} onChange={e => set('phone', e.target.value)}
                        placeholder="Ej: 3001234567"
                        className={cls('phone')} />
-                {fieldErrors.phone && <p className="text-red-500 text-xs mt-1">{fieldErrors.phone}</p>}
+                {fieldErrors.phone
+                  ? <p className="text-red-500 text-xs mt-1">{fieldErrors.phone}</p>
+                  : <p className="text-gray-400 text-xs mt-1">10 dígitos, sin espacios ni guiones</p>}
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Correo <span className="text-gray-400">(opcional)</span></label>
@@ -262,11 +293,13 @@ const SERVICE_TYPE_TO_ENUM = {
 }
 
 // Quiropraxia / Terapia Neural → doctores con esa especialidad
-// Consulta General / Fisioterapia → doctores sin especialidad asignada
+// Consulta General → todos los doctores
+// Fisioterapia → doctores sin especialidad asignada
 function filterDoctorsByService(service, allDocs) {
   if (!service) return []
-  if (service === 'Quiropraxia')    return allDocs.filter(d => d.specialties?.includes('Quiropraxia'))
-  if (service === 'Terapia Neural') return allDocs.filter(d => d.specialties?.includes('Terapia Neural'))
+  if (service === 'Quiropraxia')      return allDocs.filter(d => d.specialties?.includes('Quiropraxia'))
+  if (service === 'Terapia Neural')   return allDocs.filter(d => d.specialties?.includes('Terapia Neural'))
+  if (service === 'Consulta General') return allDocs
   return allDocs.filter(d => !d.specialties?.length)
 }
 
@@ -282,8 +315,9 @@ export default function CreateAppointmentPage() {
   const [loading,             setLoading]             = useState(false)
   const [success,             setSuccess]             = useState(false)
   const [intervalMinutes,     setIntervalMinutes]     = useState(30)
-  const [patientAppointments, setPatientAppointments] = useState([])
-  const [showRegisterModal,   setShowRegisterModal]   = useState(false)
+  const [patientAppointments,  setPatientAppointments]  = useState([])
+  const [patientAuthorization, setPatientAuthorization] = useState(null) // autorización médica activa del paciente
+  const [showRegisterModal,    setShowRegisterModal]    = useState(false)
 
   // Búsqueda de paciente
   const [documentId,       setDocumentId]       = useState('')
@@ -383,6 +417,7 @@ export default function CreateAppointmentPage() {
     setPatientName('')
     setPatientError('')
     setPatientAppointments([])
+    setPatientAuthorization(null)
     try {
       const [patRes, idRes] = await Promise.all([
         patientApi.getById(id.trim()).catch(() => null),
@@ -396,6 +431,12 @@ export default function CreateAppointmentPage() {
         setPatientAppointments(appointmentsRes.data || [])
       } catch {
         setPatientAppointments([])
+      }
+      try {
+        const authRes = await appointmentApi.getPatientAuthorization(parseInt(id.trim()))
+        setPatientAuthorization(authRes?.status === 200 ? authRes.data : null)
+      } catch {
+        setPatientAuthorization(null)
       }
     } catch {
       setPatientError('Paciente no encontrado. Verifique el número de documento.')
@@ -423,16 +464,19 @@ export default function CreateAppointmentPage() {
     return true
   }
 
-  // Un paciente "tiene consulta general" si alguna cita previa tiene serviceType CONSULTA_GENERAL
-  const hasConsultaGeneral = () =>
-    patientAppointments.some(apt => apt.serviceType === 'CONSULTA_GENERAL')
-
-  // Paciente nuevo (sin citas) o sin consulta general: solo puede agendar Consulta General
+  // Sin autorización médica activa → solo Consulta General.
+  // Con autorización → Consulta General + el servicio autorizado.
+  const ENUM_TO_SERVICE_NAME = {
+    FISIOTERAPIA:   'Fisioterapia',
+    QUIROPRAXIA:    'Quiropraxia',
+    TERAPIA_NEURAL: 'Terapia Neural',
+  }
   const getAvailableSpecialties = () => {
-    if (patientAppointments.length === 0 || !hasConsultaGeneral()) {
-      return SERVICE_TYPES.filter(s => s === 'Consulta General')
+    if (patientAuthorization) {
+      const authorizedName = ENUM_TO_SERVICE_NAME[patientAuthorization.serviceType]
+      return authorizedName ? ['Consulta General', authorizedName] : ['Consulta General']
     }
-    return SERVICE_TYPES
+    return ['Consulta General']
   }
 
   const hasActiveAppointment = () =>
@@ -539,7 +583,7 @@ export default function CreateAppointmentPage() {
                              className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors
                         ${patientError ? 'border-red-400' : 'border-gray-200 focus:border-blue-500'}`} />
                     </div>
-                    <button type="button" onClick={handleSearchPatient} disabled={searchingPatient}
+                    <button type="button" onClick={() => handleSearchPatient()} disabled={searchingPatient}
                             className="bg-blue-600 text-white rounded-xl px-5 py-2.5 text-sm font-semibold
                       hover:bg-blue-700 transition-colors disabled:opacity-50 shrink-0">
                       {searchingPatient ? 'Buscando...' : 'Buscar'}
@@ -578,37 +622,40 @@ export default function CreateAppointmentPage() {
                   )}
                 </div>
 
-                {/* Especialidad y Profesional */}
+                {/* Tipo de servicio */}
+                <div className="bg-white rounded-2xl border border-gray-100 p-6">
+                  <h2 className="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-4">Tipo de Servicio</h2>
+                  <label className="block text-sm text-gray-500 mb-1">
+                    Tipo de servicio <span className="text-red-500">*</span>
+                  </label>
+                  <select value={selectedServiceType}
+                          onChange={e => { setselectedServiceType(e.target.value); setErrors({...errors, specialty: ''}) }}
+                          disabled={!patientName}
+                          className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors
+                    disabled:bg-gray-50 disabled:text-gray-400
+                    ${errors.specialty ? 'border-red-400' : 'border-gray-200 focus:border-blue-500'}`}>
+                    <option value="">
+                      {patientName ? 'Seleccionar tipo de servicio...' : 'Primero busca un paciente'}
+                    </option>
+                    {getAvailableSpecialties().map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {errors.specialty && <p className="text-red-500 text-xs mt-1">{errors.specialty}</p>}
+                  {patientName && !patientAuthorization && (
+                      <p className="text-blue-600 text-xs mt-1">
+                        ℹ️ Sin autorización médica activa, solo puede agendar Consulta General
+                      </p>
+                  )}
+                  {patientName && patientAuthorization && (
+                      <p className="text-green-600 text-xs mt-1">
+                        ✅ Autorizado para{' '}
+                        {ENUM_TO_SERVICE_NAME[patientAuthorization.serviceType] || patientAuthorization.serviceType}
+                      </p>
+                  )}
+                </div>
+
+                {/* Profesional */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-6">
                   <h2 className="font-semibold text-sm uppercase tracking-wider text-gray-500 mb-4">Profesional</h2>
-
-                  <div className="mb-4">
-                    <label className="block text-sm text-gray-500 mb-1">
-                      Tipo de servicio <span className="text-red-500">*</span>
-                    </label>
-                    <select value={selectedServiceType}
-                            onChange={e => { setselectedServiceType(e.target.value); setErrors({...errors, specialty: ''}) }}
-                            disabled={!patientName}
-                            className={`w-full border rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors
-                      disabled:bg-gray-50 disabled:text-gray-400
-                      ${errors.specialty ? 'border-red-400' : 'border-gray-200 focus:border-blue-500'}`}>
-                      <option value="">
-                        {patientName ? 'Seleccionar tipo de servicio...' : 'Primero busca un paciente'}
-                      </option>
-                      {getAvailableSpecialties().map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {errors.specialty && <p className="text-red-500 text-xs mt-1">{errors.specialty}</p>}
-                    {patientName && patientAppointments.length === 0 && (
-                        <p className="text-blue-600 text-xs mt-1">
-                          ℹ️ Como paciente nuevo, debes agendar primero con Consulta General
-                        </p>
-                    )}
-                    {patientName && patientAppointments.length > 0 && !hasConsultaGeneral() && (
-                        <p className="text-orange-600 text-xs mt-1">
-                          ℹ️ Debes tener al menos una cita con Consulta General antes de acceder a otros servicios
-                        </p>
-                    )}
-                  </div>
 
                   <div>
                     <label className="block text-sm text-gray-500 mb-1">

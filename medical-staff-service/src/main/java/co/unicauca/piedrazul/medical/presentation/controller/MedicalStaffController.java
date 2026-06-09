@@ -78,7 +78,7 @@ public class MedicalStaffController {
 
     @GetMapping("/doctors/{id}/schedule")
     @Operation(summary = "Obtener horario de un médico")
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'DOCTOR', 'PACIENTE')")
     public ResponseEntity<?> getDoctorSchedule(@PathVariable int id) {
         try {
             return ResponseEntity.ok(

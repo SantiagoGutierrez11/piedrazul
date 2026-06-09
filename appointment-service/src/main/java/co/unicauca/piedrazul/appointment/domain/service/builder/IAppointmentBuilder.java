@@ -11,9 +11,9 @@ import java.time.LocalTime;
  */
 public interface IAppointmentBuilder {
 
-    IAppointmentBuilder doctorId(int doctorId);
+    IAppointmentBuilder doctorId(long doctorId);
     IAppointmentBuilder doctorName(String doctorName);
-    IAppointmentBuilder patientId(int patientId);
+    IAppointmentBuilder patientId(long patientId);
     IAppointmentBuilder date(LocalDate date);
     IAppointmentBuilder startTime(LocalTime startTime);
     IAppointmentBuilder endTime(LocalTime endTime);

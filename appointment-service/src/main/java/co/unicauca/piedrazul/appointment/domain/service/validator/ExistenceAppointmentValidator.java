@@ -33,7 +33,7 @@ public class ExistenceAppointmentValidator implements AppointmentValidator {
         }
     }
 
-    private UserCache resolveUser(int userId, String role) {
+    private UserCache resolveUser(long userId, String role) {
         return userValidationPort.findUserById(userId)
                 .orElseThrow(() -> new AppointmentNotFoundException(
                         role + " no encontrado con ID: " + userId));

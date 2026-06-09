@@ -2,8 +2,11 @@ package co.unicauca.piedrazul.appointment.infrastructure.in.rest;
 
 import co.unicauca.piedrazul.appointment.domain.model.Appointment;
 import co.unicauca.piedrazul.appointment.domain.port.in.AppointmentUseCase;
+import co.unicauca.piedrazul.appointment.domain.model.ServiceType;
 import co.unicauca.piedrazul.appointment.infrastructure.in.rest.dto.AppointmentDTOs.AppointmentResponse;
+import co.unicauca.piedrazul.appointment.infrastructure.in.rest.dto.AppointmentDTOs.AttendAppointmentRequest;
 import co.unicauca.piedrazul.appointment.infrastructure.in.rest.dto.AppointmentDTOs.CreateAppointmentRequest;
+import co.unicauca.piedrazul.appointment.infrastructure.in.rest.dto.AppointmentDTOs.PatientAuthorizationResponse;
 import co.unicauca.piedrazul.appointment.infrastructure.in.rest.dto.AppointmentDTOs.RescheduleAppointmentRequest;
 import co.unicauca.piedrazul.appointment.infrastructure.in.rest.mapper.AppointmentDtoMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +15,7 @@ import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -44,9 +48,9 @@ public class AppointmentController {
 
     @GetMapping("/doctor/{doctorId}/date/{date}")
     @Operation(summary = "Listar citas por médico y fecha")
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'DOCTOR', 'PACIENTE')")
     public ResponseEntity<List<AppointmentResponse>> listByDoctorAndDate(
-            @PathVariable int doctorId,
+            @PathVariable long doctorId,
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(
                 appointmentUseCase.listByDoctorAndDate(doctorId, date)
@@ -55,7 +59,7 @@ public class AppointmentController {
 
     @PostMapping
     @Operation(summary = "Crear cita manual")
-    @PreAuthorize("hasRole('AGENDADOR')")
+    @PreAuthorize("hasAnyRole('AGENDADOR', 'PACIENTE')")
     public ResponseEntity<AppointmentResponse> createAppointment(
             @Valid @RequestBody CreateAppointmentRequest request) {
         Appointment appointment = appointmentMapper.toEntity(request);
@@ -77,16 +81,33 @@ public class AppointmentController {
 
     @PatchMapping("/{id}/cancel")
     @Operation(summary = "Cancelar cita")
-    @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'PACIENTE', 'DOCTOR')")
     public ResponseEntity<AppointmentResponse> cancel(@PathVariable int id) {
         return ResponseEntity.ok(appointmentMapper.toResponse(appointmentUseCase.cancelAppointment(id)));
     }
 
     @PatchMapping("/{id}/attend")
-    @Operation(summary = "Marcar cita como atendida")
+    @Operation(summary = "Marcar cita como atendida y otorgar autorización de servicio opcional")
     @PreAuthorize("hasRole('DOCTOR')")
-    public ResponseEntity<AppointmentResponse> markAsAttended(@PathVariable int id) {
-        return ResponseEntity.ok(appointmentMapper.toResponse(appointmentUseCase.markAsAttended(id)));
+    public ResponseEntity<AppointmentResponse> markAsAttended(
+            @PathVariable int id,
+            @RequestBody(required = false) @Nullable AttendAppointmentRequest request) {
+        ServiceType authorized = (request != null) ? request.authorizedServiceType() : null;
+        return ResponseEntity.ok(
+                appointmentMapper.toResponse(appointmentUseCase.markAsAttended(id, authorized)));
+    }
+
+    @GetMapping("/patient/{patientId}/authorization")
+    @Operation(summary = "Obtener autorización de servicio activa del paciente")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'PACIENTE', 'DOCTOR')")
+    public ResponseEntity<?> getPatientAuthorization(@PathVariable long patientId) {
+        return appointmentUseCase.getPatientAuthorization(patientId)
+                .<ResponseEntity<?>>map(auth -> ResponseEntity.ok(new PatientAuthorizationResponse(
+                        auth.getAuthId(),
+                        auth.getServiceType(),
+                        auth.getAuthorizedAt(),
+                        auth.getExpiresAt())))
+                .orElse(ResponseEntity.noContent().build());
     }
 
     @GetMapping("/{id}")
@@ -104,10 +125,19 @@ public class AppointmentController {
                 appointmentUseCase.listAll().stream().map(appointmentMapper::toResponse).toList());
     }
 
+    @GetMapping("/doctor/{doctorId}/all")
+    @Operation(summary = "Listar todas las citas de un médico (sin filtro de fecha)")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'DOCTOR')")
+    public ResponseEntity<List<AppointmentResponse>> listByDoctor(@PathVariable long doctorId) {
+        return ResponseEntity.ok(
+                appointmentUseCase.listByDoctor(doctorId)
+                        .stream().map(appointmentMapper::toResponse).toList());
+    }
+
     @GetMapping("/patient/{patientId}")
     @Operation(summary = "Listar citas de un paciente")
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'PACIENTE')")
-    public ResponseEntity<List<AppointmentResponse>> listByPatient(@PathVariable int patientId) {
+    public ResponseEntity<List<AppointmentResponse>> listByPatient(@PathVariable long patientId) {
         return ResponseEntity.ok(
                 appointmentUseCase.listByPatient(patientId)
                         .stream().map(appointmentMapper::toResponse).toList());

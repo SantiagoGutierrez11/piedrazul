@@ -98,7 +98,7 @@ public class AuthController {
     @GetMapping("/users/{id}")
     @Operation(summary = "Buscar usuario por ID")
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'DOCTOR')")
-    public ResponseEntity<?> findById(@PathVariable int id) {
+    public ResponseEntity<?> findById(@PathVariable long id) {
         try {
             return ResponseEntity.ok(userMapper.toResponse(identityService.findById(id)));
         } catch (IllegalArgumentException e) {
@@ -109,7 +109,7 @@ public class AuthController {
     // Uso interno — llamado desde appointment-service sin JWT (no expuesto en API gateway)
     @GetMapping("/internal/users/{id}")
     @Operation(summary = "Buscar usuario por ID (uso interno entre servicios)")
-    public ResponseEntity<?> findByIdInternal(@PathVariable int id) {
+    public ResponseEntity<?> findByIdInternal(@PathVariable long id) {
         try {
             return ResponseEntity.ok(userMapper.toResponse(identityService.findById(id)));
         } catch (IllegalArgumentException e) {
@@ -131,7 +131,7 @@ public class AuthController {
     @PatchMapping("/users/{id}/deactivate")
     @Operation(summary = "Desactivar usuario")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> deactivate(@PathVariable int id) {
+    public ResponseEntity<?> deactivate(@PathVariable long id) {
         try {
             identityService.deactivate(id);
             return ResponseEntity.ok(new MessageResponse("Usuario desactivado correctamente"));

@@ -13,9 +13,9 @@ import java.time.LocalTime;
  */
 public class AppointmentBuilder implements IAppointmentBuilder {
 
-    private int doctorId;
+    private long doctorId;
     private String doctorName;
-    private int patientId;
+    private long patientId;
     private LocalDate date;
     private LocalTime startTime;
     private LocalTime endTime;
@@ -24,11 +24,11 @@ public class AppointmentBuilder implements IAppointmentBuilder {
     private ServiceType serviceType = ServiceType.CONSULTA_GENERAL;
 
     @Override
-    public IAppointmentBuilder doctorId(int doctorId) { this.doctorId = doctorId; return this; }
+    public IAppointmentBuilder doctorId(long doctorId) { this.doctorId = doctorId; return this; }
     @Override
     public IAppointmentBuilder doctorName(String doctorName) { this.doctorName = doctorName; return this; }
     @Override
-    public IAppointmentBuilder patientId(int patientId) { this.patientId = patientId; return this; }
+    public IAppointmentBuilder patientId(long patientId) { this.patientId = patientId; return this; }
     @Override
     public IAppointmentBuilder date(LocalDate date) { this.date = date; return this; }
     @Override

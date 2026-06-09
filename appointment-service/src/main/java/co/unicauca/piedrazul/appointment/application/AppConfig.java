@@ -2,7 +2,8 @@ package co.unicauca.piedrazul.appointment.application;
 
 import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentEventPort;
 import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentRepositoryPort;
-import co.unicauca.piedrazul.appointment.domain.port.out.DoctorSpecialtyPort;
+import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentWindowPort;
+import co.unicauca.piedrazul.appointment.domain.port.out.PatientAuthorizationPort;
 import co.unicauca.piedrazul.appointment.domain.port.out.UserValidationPort;
 import co.unicauca.piedrazul.appointment.domain.service.ColombianHolidaysService;
 import co.unicauca.piedrazul.appointment.domain.service.builder.AppointmentDirector;
@@ -10,6 +11,7 @@ import co.unicauca.piedrazul.appointment.domain.service.template.ManualAppointme
 import co.unicauca.piedrazul.appointment.domain.service.template.RescheduleAppointmentScheduling;
 import co.unicauca.piedrazul.appointment.domain.service.validator.ActiveAppointmentValidator;
 import co.unicauca.piedrazul.appointment.domain.service.validator.AppointmentValidator;
+import co.unicauca.piedrazul.appointment.domain.service.validator.AppointmentWindowValidator;
 import co.unicauca.piedrazul.appointment.domain.service.validator.ConflictAppointmentValidator;
 import co.unicauca.piedrazul.appointment.domain.service.validator.DataAppointmentValidator;
 import co.unicauca.piedrazul.appointment.domain.service.validator.ExistenceAppointmentValidator;
@@ -85,9 +87,13 @@ public class AppConfig {
     }
 
     @Bean
-    public MedicinaGeneralValidator medicinaGeneralValidator(AppointmentRepositoryPort repositoryPort,
-                                                              DoctorSpecialtyPort doctorSpecialtyPort) {
-        return new MedicinaGeneralValidator(repositoryPort, doctorSpecialtyPort);
+    public MedicinaGeneralValidator medicinaGeneralValidator(PatientAuthorizationPort authorizationPort) {
+        return new MedicinaGeneralValidator(authorizationPort);
+    }
+
+    @Bean
+    public AppointmentWindowValidator appointmentWindowValidator(AppointmentWindowPort windowPort) {
+        return new AppointmentWindowValidator(windowPort);
     }
 
     @Bean
@@ -101,6 +107,7 @@ public class AppConfig {
             HolidayValidator holidayValidator,
             ExistenceAppointmentValidator existenceValidator,
             ActiveAppointmentValidator activeValidator,
+            AppointmentWindowValidator appointmentWindowValidator,
             MedicinaGeneralValidator medicinaGeneralValidator,
             ConflictAppointmentValidator conflictValidator) {
 
@@ -109,6 +116,7 @@ public class AppConfig {
                 holidayValidator,
                 existenceValidator,
                 activeValidator,
+                appointmentWindowValidator,
                 medicinaGeneralValidator,
                 conflictValidator
         );

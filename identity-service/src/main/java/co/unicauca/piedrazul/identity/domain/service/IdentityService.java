@@ -74,7 +74,7 @@ public class IdentityService {
         return saved;
     }
 
-    public User findById(int id) {
+    public User findById(long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
     }
@@ -89,7 +89,7 @@ public class IdentityService {
     }
 
     @Transactional
-    public void deactivate(int id) {
+    public void deactivate(long id) {
         User user = findById(id);
         user.setState(UserState.INACTIVO);
         userRepository.save(user);

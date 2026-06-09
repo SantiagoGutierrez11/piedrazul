@@ -14,7 +14,7 @@ public class PatientDTOs {
     // --- Request: Registro web (RF3) — todos los campos obligatorios ---
     public record WebRegisterRequest(
             @Positive(message = "El número de documento debe ser positivo")
-            int documentId,
+            long documentId,
 
             @NotBlank(message = "El tipo de documento es obligatorio")
             String userTypeId,
@@ -65,7 +65,7 @@ public class PatientDTOs {
             @NotBlank(message = "El tipo de documento es obligatorio")
             String userTypeId,
 
-            int userId,
+            long userId,
 
             @NotBlank(message = "El rol es obligatorio")
             String roleName
@@ -74,7 +74,7 @@ public class PatientDTOs {
     // --- Request: Registro por agendador (RF2) — fecha y correo opcionales ---
     public record AgendadorRegisterRequest(
             @Positive(message = "El número de documento debe ser positivo")
-            int documentId,
+            long documentId,
 
             @NotBlank(message = "El tipo de documento es obligatorio")
             String userTypeId,
@@ -104,7 +104,7 @@ public class PatientDTOs {
 
     // --- Response: Datos del paciente ---
     public record PatientResponse(
-            int id,
+            long id,
             String fullName,
             String email,
             String phone,

@@ -40,33 +40,60 @@ public class PatientController {
     // Público — el paciente aún no tiene cuenta cuando se registra por web
     /**
      * Perfil del paciente autenticado.
-     * Intenta usar el claim "userId" del JWT (documentId entero); si no existe,
-     * hace fallback por email del token.
+     * Tres intentos de resolución, en orden de preferencia:
+     *   1. Claim "userId" del JWT (puede llegar como Number, String o List según el mapper de Keycloak)
+     *   2. Claim "email"
+     *   3. Claim "preferred_username" (puede ser el número de documento o el correo)
      */
     @GetMapping("/me")
     @Operation(summary = "Obtener perfil del paciente autenticado")
     @PreAuthorize("hasRole('PACIENTE')")
     public ResponseEntity<?> getMyProfile(@AuthenticationPrincipal Jwt jwt) {
-        // Intento 1: claim userId (configurado en el realm de Keycloak como long)
+        // Intento 1: claim userId — el mapper de Keycloak puede enviarlo como Number, String o List<String>
         Object userIdClaim = jwt.getClaim("userId");
+        Long documentId = null;
         if (userIdClaim instanceof Number num) {
-            int documentId = num.intValue();
-            if (documentId > 0) {
-                try {
-                    return ResponseEntity.ok(patientMapper.toResponse(patientService.findById(documentId)));
-                } catch (IllegalArgumentException ignored) { /* fallback a email */ }
+            documentId = num.longValue();
+        } else if (userIdClaim instanceof String s) {
+            try { documentId = Long.parseLong(s.trim()); } catch (NumberFormatException ignored) {}
+        } else if (userIdClaim instanceof java.util.List<?> list && !list.isEmpty()) {
+            Object first = list.get(0);
+            if (first instanceof String s) {
+                try { documentId = Long.parseLong(s.trim()); } catch (NumberFormatException ignored) {}
+            } else if (first instanceof Number n) {
+                documentId = n.longValue();
             }
         }
-        // Intento 2: fallback por email del token (cuando el atributo userId no fue seteado en Keycloak)
+        if (documentId != null && documentId > 0) {
+            try {
+                return ResponseEntity.ok(patientMapper.toResponse(patientService.findById(documentId)));
+            } catch (IllegalArgumentException ignored) { /* continuar con siguiente intento */ }
+        }
+
+        // Intento 2: fallback por email del token
         String email = jwt.getClaimAsString("email");
         if (email != null && !email.isBlank()) {
             try {
                 return ResponseEntity.ok(patientMapper.toResponse(patientService.findByEmail(email)));
-            } catch (IllegalArgumentException e) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                       .body(new MessageResponse("Paciente no encontrado"));
-            }
+            } catch (IllegalArgumentException ignored) { /* continuar */ }
         }
+
+        // Intento 3: preferred_username — presente siempre en JWT de Keycloak
+        // Puede ser el número de documento (numérico) o el correo del paciente
+        String preferredUsername = jwt.getClaimAsString("preferred_username");
+        if (preferredUsername != null && !preferredUsername.isBlank()) {
+            try {
+                long docId = Long.parseLong(preferredUsername.trim());
+                if (docId > 0) {
+                    return ResponseEntity.ok(patientMapper.toResponse(patientService.findById(docId)));
+                }
+            } catch (NumberFormatException ignored) {}
+            // Si no es un número, intentar como email
+            try {
+                return ResponseEntity.ok(patientMapper.toResponse(patientService.findByEmail(preferredUsername)));
+            } catch (IllegalArgumentException ignored) {}
+        }
+
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                .body(new MessageResponse("No se pudo identificar al paciente"));
     }
@@ -133,7 +160,7 @@ public class PatientController {
     @GetMapping("/{id}")
     @Operation(summary = "Buscar paciente por documento")
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR', 'DOCTOR')")
-    public ResponseEntity<?> findById(@PathVariable int id) {
+    public ResponseEntity<?> findById(@PathVariable long id) {
         try {
             return ResponseEntity.ok(patientMapper.toResponse(patientService.findById(id)));
         } catch (IllegalArgumentException e) {
@@ -144,7 +171,7 @@ public class PatientController {
     @PutMapping("/{id}")
     @Operation(summary = "Actualizar paciente")
     @PreAuthorize("hasAnyRole('ADMIN', 'AGENDADOR')")
-    public ResponseEntity<?> update(@PathVariable int id, @Valid @RequestBody AgendadorRegisterRequest request) {
+    public ResponseEntity<?> update(@PathVariable long id, @Valid @RequestBody AgendadorRegisterRequest request) {
         try {
             Patient patient = patientMapper.toEntity(request);
             patient.setId(id);

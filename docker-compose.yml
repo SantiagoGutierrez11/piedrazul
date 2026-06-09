@@ -272,11 +272,15 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_USERNAME: piedrazul
       SPRING_RABBITMQ_PASSWORD: piedrazul_pass
+      KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/piedrazul
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/piedrazul/protocol/openid-connect/certs
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: DEBUG
     ports:
       - "8085:8085"
     depends_on:
       - postgres-configuration
       - rabbitmq
+      - keycloak
     networks:
       - piedrazul-network
 

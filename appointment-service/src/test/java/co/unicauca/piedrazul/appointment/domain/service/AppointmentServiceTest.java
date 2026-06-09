@@ -5,6 +5,7 @@ import co.unicauca.piedrazul.appointment.domain.model.Appointment;
 import co.unicauca.piedrazul.appointment.domain.model.AppointmentStatus;
 import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentEventPort;
 import co.unicauca.piedrazul.appointment.domain.port.out.AppointmentRepositoryPort;
+import co.unicauca.piedrazul.appointment.domain.port.out.PatientAuthorizationPort;
 import co.unicauca.piedrazul.appointment.domain.service.template.ManualAppointmentScheduling;
 import co.unicauca.piedrazul.appointment.domain.service.template.RescheduleAppointmentScheduling;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,13 +34,14 @@ class AppointmentServiceTest {
     @Mock private AppointmentEventPort            eventPort;
     @Mock private ManualAppointmentScheduling     manualScheduling;
     @Mock private RescheduleAppointmentScheduling rescheduleScheduling;
+    @Mock private PatientAuthorizationPort        authorizationPort;
 
     private AppointmentService appointmentService;
 
     @BeforeEach
     void setUp() {
         appointmentService = new AppointmentService(
-                repositoryPort, eventPort, manualScheduling, rescheduleScheduling);
+                repositoryPort, eventPort, manualScheduling, rescheduleScheduling, authorizationPort);
     }
 
     private Appointment buildAppointment(int id, AppointmentStatus status) {
@@ -101,7 +103,7 @@ class AppointmentServiceTest {
         when(repositoryPort.findById(3)).thenReturn(Optional.of(appointment));
         when(repositoryPort.save(any())).thenReturn(appointment);
 
-        Appointment result = appointmentService.markAsAttended(3);
+        Appointment result = appointmentService.markAsAttended(3, null);
 
         assertEquals(AppointmentStatus.ATENDIDA, result.getStatus());
         verify(eventPort).publishAppointmentEvent(appointment);

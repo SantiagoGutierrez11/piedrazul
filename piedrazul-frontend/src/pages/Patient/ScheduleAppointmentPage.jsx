@@ -16,9 +16,10 @@ const SERVICE_TYPE_TO_ENUM = {
 }
 function filterDoctorsByService(service, allDocs) {
     if (!service) return []
-    if (service === 'Quiropraxia')    return allDocs.filter(d => d.specialties?.includes('Quiropraxia'))
-    if (service === 'Terapia Neural') return allDocs.filter(d => d.specialties?.includes('Terapia Neural'))
-    return allDocs.filter(d => !d.specialties?.length)
+    if (service === 'Quiropraxia')      return allDocs.filter(d => d.specialties?.includes('Quiropraxia'))
+    if (service === 'Terapia Neural')   return allDocs.filter(d => d.specialties?.includes('Terapia Neural'))
+    if (service === 'Consulta General') return allDocs
+    return allDocs.filter(d => !d.specialties?.length)  // Fisioterapia
 }
 const DAYS   = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -56,14 +57,15 @@ export default function ScheduleAppointmentPage() {
     const [success, setSuccess]                 = useState(false)
     const [errorMsg, setErrorMsg]               = useState('')
 
-    const [patientId,           setPatientId]           = useState(null) // integer resuelto via /patients/me
-    const [isFirstAppointment, setIsFirstAppointment] = useState(false)
+    const [patientId,             setPatientId]             = useState(null) // integer resuelto via /patients/me
     const [hasActiveAppointment, setHasActiveAppointment] = useState(false)
+    const [authorization,        setAuthorization]        = useState(null)  // autorización médica activa
 
     const [selectedSpecialty, setSelectedSpecialty] = useState(null)
     const [selectedDoctor,    setSelectedDoctor]    = useState(null)
     const [selectedDate,      setSelectedDate]      = useState('')
     const [selectedTime,      setSelectedTime]      = useState('')
+    const [reason,            setReason]            = useState('')
 
     const today = new Date()
     const [calYear,  setCalYear]  = useState(today.getFullYear())
@@ -72,35 +74,52 @@ export default function ScheduleAppointmentPage() {
     useEffect(() => {
         if (!user) return
         setLoading(true)
+
         // Paso 1: resolver el patientId real (integer) vía /patients/me
+        // Si falla (404 en paciente recién creado) continuamos con null — igual cargamos médicos
         patientApi.getMe()
+            .catch(() => ({ data: null }))
             .then(meRes => {
-                const realId = meRes.data?.id
+                const realId = meRes?.data?.id ?? null
                 setPatientId(realId)
-                // Paso 2: cargar médicos + citas del paciente en paralelo
+
+                // Paso 2: cargar médicos, citas y autorización en paralelo
                 return Promise.all([
                     medicalApi.listDoctors(),
                     realId
                         ? appointmentApi.listByPatient(realId).catch(() => ({ data: [] }))
                         : Promise.resolve({ data: [] }),
+                    realId
+                        ? appointmentApi.getPatientAuthorization(realId).catch(() => null)
+                        : Promise.resolve(null),
                 ])
             })
-            .then(([docsRes, aptsRes]) => {
-                const docs = docsRes.data || []
-                const apts = aptsRes.data || []
+            .then(([docsRes, aptsRes, authRes]) => {
+                const docs  = docsRes.data || []
+                const apts  = aptsRes.data || []
+                const auth  = authRes?.status === 200 ? authRes.data : null
                 setAllDoctors(docs)
-
-                const hasConsultaGeneral = apts.some(a => a.serviceType === 'CONSULTA_GENERAL')
-                const firstAppointment   = apts.length === 0 || !hasConsultaGeneral
-                setIsFirstAppointment(firstAppointment)
+                setAuthorization(auth)
 
                 const activeApt = apts.some(a => a.status === 'AGENDADA' || a.status === 'REAGENDADA')
                 setHasActiveAppointment(activeApt)
 
-                // Especialidades disponibles según historial del paciente
-                const availableServices = firstAppointment
-                    ? SERVICE_TYPES.filter(s => s === 'Consulta General')
-                    : SERVICE_TYPES
+                // Regla: sin autorización médica → solo Consulta General.
+                // Con autorización activa → Consulta General + el servicio autorizado.
+                const ENUM_TO_SERVICE = {
+                    FISIOTERAPIA:   'Fisioterapia',
+                    QUIROPRAXIA:    'Quiropraxia',
+                    TERAPIA_NEURAL: 'Terapia Neural',
+                }
+                let availableServices
+                if (auth) {
+                    const authorizedName = ENUM_TO_SERVICE[auth.serviceType]
+                    availableServices = authorizedName
+                        ? ['Consulta General', authorizedName]
+                        : ['Consulta General']
+                } else {
+                    availableServices = ['Consulta General']
+                }
                 setSpecialties(availableServices.map(name => ({ name })))
             })
             .catch(() => { setAllDoctors([]); setSpecialties([]) })
@@ -151,6 +170,7 @@ export default function ScheduleAppointmentPage() {
         if (step === 0) return !!selectedSpecialty
         if (step === 1) return !!selectedDoctor
         if (step === 2) return !!selectedDate && !!selectedTime
+        if (step === 3) return !!reason.trim()
         return true
     }
 
@@ -164,16 +184,29 @@ export default function ScheduleAppointmentPage() {
     const handleConfirm = async () => {
         setSubmitting(true)
         setErrorMsg('')
+
+        // Resolver el ID entero del paciente:
+        // 1º el resuelto vía /patients/me
+        // 2º el username si es numérico (Keycloak usa la cédula como username)
+        const resolvedPatientId = patientId
+            ?? (parseInt(user?.username) > 0 ? parseInt(user?.username) : null)
+
+        if (!resolvedPatientId) {
+            setErrorMsg('No se pudo identificar tu cuenta de paciente. Por favor contacta al administrador.')
+            setSubmitting(false)
+            return
+        }
+
         try {
             await appointmentApi.create({
-                patientId:   patientId || parseInt(user?.id) || 0,
+                patientId:   resolvedPatientId,
                 doctorId:    selectedDoctor.id,
                 doctorName:  selectedDoctor.displayName || selectedDoctor.fullName || `Profesional ${selectedDoctor.id}`,
                 serviceType: SERVICE_TYPE_TO_ENUM[selectedSpecialty.name] || 'CONSULTA_GENERAL',
                 date:        selectedDate,
                 startTime:   selectedTime,
                 endTime:     addMinutes(selectedTime, intervalMinutes),
-                reason:      selectedSpecialty.name,
+                reason:      reason.trim() || selectedSpecialty.name,
                 notes:       '',
             })
             setSuccess(true)
@@ -264,12 +297,26 @@ export default function ScheduleAppointmentPage() {
                     <p className="text-gray-500 text-sm mt-1">Sigue los pasos para agendar tu cita médica</p>
                 </div>
 
-                {isFirstAppointment && (
+                {!authorization && (
                     <div className="mb-4 bg-blue-50 border border-blue-100 rounded-2xl px-5 py-3 flex items-start gap-3">
                         <span className="text-blue-500 text-lg mt-0.5">ℹ️</span>
                         <p className="text-sm text-blue-700">
-                            Para tu primera cita debes consultar con <strong>Consulta General</strong>.
-                            Una vez atendido, podrás acceder a las demás especialidades.
+                            Para acceder a servicios especializados necesitas que el médico te autorice
+                            durante una <strong>Consulta General</strong>.
+                        </p>
+                    </div>
+                )}
+
+                {authorization && (
+                    <div className="mb-4 bg-green-50 border border-green-100 rounded-2xl px-5 py-3 flex items-start gap-3">
+                        <span className="text-green-500 text-lg mt-0.5">✅</span>
+                        <p className="text-sm text-green-700">
+                            Tu médico te autorizó para acceder a{' '}
+                            <strong>
+                                {{ FISIOTERAPIA: 'Fisioterapia', QUIROPRAXIA: 'Quiropraxia', TERAPIA_NEURAL: 'Terapia Neural' }[authorization.serviceType] || authorization.serviceType}
+                            </strong>.{' '}
+                            La autorización caduca el{' '}
+                            {new Date(authorization.expiresAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}.
                         </p>
                     </div>
                 )}
@@ -448,6 +495,20 @@ export default function ScheduleAppointmentPage() {
                                         <span className="text-sm font-semibold text-gray-800">{row.value}</span>
                                     </div>
                                 ))}
+                            </div>
+
+                            <div className="mt-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Motivo de consulta <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    value={reason}
+                                    onChange={e => setReason(e.target.value)}
+                                    rows={3}
+                                    placeholder="Describe brevemente el motivo de tu consulta..."
+                                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm
+                                               focus:outline-none focus:border-blue-500 transition-colors resize-none"
+                                />
                             </div>
                             {errorMsg && (
                                 <div className="mt-4 bg-red-50 border border-red-100 rounded-2xl px-5 py-3 flex items-start gap-3">
