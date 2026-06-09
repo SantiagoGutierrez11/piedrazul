@@ -63,12 +63,12 @@ public class SecurityConfig {
                         // ── PACIENTES ──
                         .pathMatchers(HttpMethod.GET, "/api/v1/patients/**").hasAnyRole("PACIENTE", "DOCTOR", "ADMIN", "AGENDADOR")
                         .pathMatchers(HttpMethod.POST, "/api/v1/patients/register/web").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/v1/patients/**").hasAnyRole("ADMIN", "AGENDADOR")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/patients/**").hasAnyRole("ADMIN", "AGENDADOR", "DOCTOR")
                         .pathMatchers(HttpMethod.PUT, "/api/v1/patients/**").hasAnyRole("PACIENTE", "ADMIN")
                         .pathMatchers(HttpMethod.DELETE, "/api/v1/patients/**").hasRole("ADMIN")
 
                         // ── CITAS ──
-                        .pathMatchers(HttpMethod.POST, "/api/v1/appointments").hasAnyRole("PACIENTE", "AGENDADOR", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/v1/appointments").hasAnyRole("PACIENTE", "AGENDADOR", "ADMIN", "DOCTOR")
                         .pathMatchers(HttpMethod.GET, "/api/v1/appointments/patient/**").hasAnyRole("PACIENTE", "DOCTOR", "ADMIN")
                         .pathMatchers(HttpMethod.GET, "/api/v1/appointments/doctor/**").hasAnyRole("DOCTOR", "ADMIN", "AGENDADOR", "PACIENTE")
                         .pathMatchers(HttpMethod.GET, "/api/v1/appointments/**").hasAnyRole("DOCTOR", "ADMIN", "AGENDADOR")
