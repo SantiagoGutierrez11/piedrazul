@@ -50,7 +50,10 @@ public class SecurityConfig {
                         .pathMatchers("/swagger-ui/**", "/api-docs/**", "/webjars/**").permitAll()
                         .pathMatchers("/v3/api-docs/**").permitAll()
 
-                        // ── CONFIGURACIÓN (Solo ADMIN) ──
+                        // ── CONFIGURACIÓN ──
+                        // Lectura de configuración: accesible para todo el personal
+                        .pathMatchers(HttpMethod.GET, "/api/v1/configuration/**").hasAnyRole("ADMIN", "DOCTOR", "AGENDADOR")
+                        // Escritura: solo ADMIN
                         .pathMatchers("/api/v1/configuration/**").hasRole("ADMIN")
 
                         // ── MÉDICOS ──
