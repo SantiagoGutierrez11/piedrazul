@@ -4,6 +4,7 @@ import Layout from '../../components/Layout'
 import { medicalApi, appointmentApi, patientApi, identityApi } from '../../api'
 import { useAuth } from '../../api/AuthContext'
 import { isHoliday } from '../../utils/colombianHolidays'
+import configurationService from '../../api/configurationService'
 
 const DAYS   = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -299,8 +300,8 @@ function filterDoctorsByService(service, allDocs) {
   if (!service) return []
   if (service === 'Quiropraxia')      return allDocs.filter(d => d.specialties?.includes('Quiropraxia'))
   if (service === 'Terapia Neural')   return allDocs.filter(d => d.specialties?.includes('Terapia Neural'))
-  if (service === 'Consulta General') return allDocs
-  return allDocs.filter(d => !d.specialties?.length)
+  // Consulta General y Fisioterapia: cualquier médico puede atender
+  return allDocs
 }
 
 export default function CreateAppointmentPage() {
@@ -339,6 +340,14 @@ export default function CreateAppointmentPage() {
   const today = new Date()
   const [calYear,  setCalYear]  = useState(today.getFullYear())
   const [calMonth, setCalMonth] = useState(today.getMonth())
+  const [windowWeeks, setWindowWeeks] = useState(4)
+
+  // --- Cargar ventana de agendamiento desde configuración ---
+  useEffect(() => {
+    configurationService.getGlobalConfiguration()
+      .then(data => { if (data?.weeks) setWindowWeeks(data.weeks) })
+      .catch(() => {}) // fallback: 4 semanas
+  }, [])
 
   // --- Cargar médicos ---
   useEffect(() => {
@@ -459,6 +468,9 @@ export default function CreateAppointmentPage() {
     const d = new Date(calYear, calMonth, day)
     const t = new Date(today.getFullYear(), today.getMonth(), today.getDate())
     if (d < t) return false
+    const maxDate = new Date(t)
+    maxDate.setDate(maxDate.getDate() + windowWeeks * 7)
+    if (d > maxDate) return false
     if (isHoliday(d)) return false
     if (scheduleDays !== null && !scheduleDays.has(d.getDay())) return false
     return true
