@@ -72,7 +72,7 @@ public class SecurityConfig {
 
                         // ── CITAS ──
                         .pathMatchers(HttpMethod.POST, "/api/v1/appointments").hasAnyRole("PACIENTE", "AGENDADOR", "ADMIN", "DOCTOR")
-                        .pathMatchers(HttpMethod.GET, "/api/v1/appointments/patient/**").hasAnyRole("PACIENTE", "DOCTOR", "ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/api/v1/appointments/patient/**").hasAnyRole("PACIENTE", "DOCTOR", "ADMIN", "AGENDADOR")
                         .pathMatchers(HttpMethod.GET, "/api/v1/appointments/doctor/**").hasAnyRole("DOCTOR", "ADMIN", "AGENDADOR", "PACIENTE")
                         .pathMatchers(HttpMethod.GET, "/api/v1/appointments/**").hasAnyRole("DOCTOR", "ADMIN", "AGENDADOR")
                         .pathMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/cancel").hasAnyRole("PACIENTE", "AGENDADOR", "DOCTOR", "ADMIN")

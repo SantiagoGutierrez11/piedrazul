@@ -49,9 +49,8 @@ function filterDoctorsByService(service, allDocs) {
   if (!service) return []
   if (service === 'Quiropraxia')      return allDocs.filter(d => d.specialties?.includes('Quiropraxia'))
   if (service === 'Terapia Neural')   return allDocs.filter(d => d.specialties?.includes('Terapia Neural'))
-  if (service === 'Consulta General') return allDocs
-  // Fisioterapia → doctores sin especialidad
-  return allDocs.filter(d => !d.specialties?.length)
+  // Consulta General y Fisioterapia: cualquier médico puede atender
+  return allDocs
 }
 
 // Servicios especializados que el médico puede autorizar (excluye Consulta General)
@@ -436,6 +435,7 @@ export default function DoctorAppointmentsPage() {
           }
         })
       )
+      enriched.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
       setAppointments(enriched)
       setCurrentPage(1)
     } catch {
